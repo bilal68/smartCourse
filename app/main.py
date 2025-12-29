@@ -14,7 +14,7 @@ load_dotenv()
 # Record process start time for uptime reporting
 _START_TIME = time.time()
 
-
+app.include_router(api_router, prefix="/api/v1")
 @app.get("/health")
 async def health():
     """Simple health endpoint returning status, uptime, and timestamp."""
@@ -31,4 +31,3 @@ async def health():
 def db_health_sa(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"db": "ok"}
-app.include_router(api_router, prefix="/api/v1")

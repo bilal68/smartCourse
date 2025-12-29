@@ -11,10 +11,11 @@ class Settings(BaseSettings):
     )
 
     DATABASE_URL: str
-    
+    REDIS_URL: str 
     # JWT settings
-    JWT_SECRET_KEY: str = "change-me-in-env"
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
 
 settings = Settings()
