@@ -10,7 +10,7 @@
                 "app.main:app",
                 "--reload"
             ],
-            "envFile": "${workspaceFolder}/.env",
+            "envFile": "${workspaceFolder}/.env.local",
             "console": "integratedTerminal",
             "justMyCode": true
         },
@@ -22,7 +22,7 @@
             "args": [
                 "app.main:app"
             ],
-            "envFile": "${workspaceFolder}/.env",
+            "envFile": "${workspaceFolder}/.env.local",
             "console": "integratedTerminal",
             "justMyCode": true
         }

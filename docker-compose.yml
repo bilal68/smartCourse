@@ -31,6 +31,19 @@ services:
       timeout: 3s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartcourse-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build:
       context: .
@@ -42,6 +55,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://smartcourse:password@postgres:5432/smartcourse_db
       REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
     ports:
       - "8000:8000"
     depends_on:
@@ -49,10 +63,34 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     volumes:
       - .:/app
     command: >
       sh -lc "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartcourse-celery
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://smartcourse:password@postgres:5432/smartcourse_db
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: >
+      sh -lc "celery -A app.celery_app.celery_app worker --loglevel=info"
 
 volumes:
   smartcourse_pgdata:
