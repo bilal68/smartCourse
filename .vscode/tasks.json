@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev:fastapi",
+      "type": "shell",
+      "command": ".\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe"
+        },
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ENV_FILE": ".env.local"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:celery",
+      "type": "shell",
+      "command": ".\\.venv\\Scripts\\python.exe -m celery -A app.celery_app worker --loglevel=info --pool=solo",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe"
+        },
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ENV_FILE": ".env.local"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:all",
+      "dependsOn": ["dev:fastapi", "dev:celery"],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

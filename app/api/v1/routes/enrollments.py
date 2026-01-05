@@ -13,6 +13,7 @@ from app.schemas.enrollment import (
     EnrollmentRead,
     EnrollmentUpdate,
 )
+from app.tasks.enrollment_tasks import handle_enrollment_post_actions
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"], dependencies=[Depends(get_current_active_user)])
 
@@ -52,7 +53,6 @@ def create_enrollment(
         .first()
     )
     if existing:
-        # for now, just return existing enrollment (idempotent behavior)
         return existing
 
     enrollment = Enrollment(
@@ -65,6 +65,7 @@ def create_enrollment(
     db.add(enrollment)
     db.commit()
     db.refresh(enrollment)
+    handle_enrollment_post_actions.delay(str(enrollment.id))
     return enrollment
 
 
