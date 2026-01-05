@@ -44,6 +44,81 @@ services:
       timeout: 3s
       retries: 10
 
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: smartcourse-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - smartcourse_zkdata:/var/lib/zookeeper/data
+      - smartcourse_zklog:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: smartcourse-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # internal (docker network) + external (your host machine)
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - smartcourse_kafkadata:/var/lib/kafka/data
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.1
+    container_name: smartcourse-schema-registry
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: smartcourse-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: smartcourse
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+
+  # Auto-creates topics once (idempotent)
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: smartcourse-kafka-init
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      "
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic smartcourse.course-events --partitions 3 --replication-factor 1 &&
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic smartcourse.enrollment-events --partitions 3 --replication-factor 1
+      "
+    restart: "no"
+
   api:
     build:
       context: .
@@ -56,6 +131,8 @@ services:
       DATABASE_URL: postgresql+psycopg://smartcourse:password@postgres:5432/smartcourse_db
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
     ports:
       - "8000:8000"
     depends_on:
@@ -65,6 +142,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      kafka:
+        condition: service_started
+      schema-registry:
+        condition: service_started
     volumes:
       - .:/app
     command: >
@@ -82,16 +163,73 @@ services:
       DATABASE_URL: postgresql+psycopg://smartcourse:password@postgres:5432/smartcourse_db
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
     depends_on:
-      redis:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      kafka:
+        condition: service_started
     volumes:
       - .:/app
     command: >
       sh -lc "celery -A app.celery_app.celery_app worker --loglevel=info"
 
+  # NEW: Celery Beat scheduler (automates outbox publisher task)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartcourse-celery-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://smartcourse:password@postgres:5432/smartcourse_db
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    volumes:
+      - .:/app
+    command: >
+      sh -lc "celery -A app.celery_app.celery_app beat --loglevel=info"
+
+  # NEW: Kafka consumer service (automates consumption)
+  kafka-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartcourse-kafka-consumer
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_GROUP_ID: smartcourse-consumers
+      DATABASE_URL: postgresql+psycopg://smartcourse:password@postgres:5432/smartcourse_db
+    depends_on:
+      kafka:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: >
+      sh -lc "python -m app.kafka.consumer_worker"
+
 volumes:
   smartcourse_pgdata:
-    external: true
+    external: true # keep as-is since you already created it
+  smartcourse_zkdata:
+  smartcourse_zklog:
+  smartcourse_kafkadata:

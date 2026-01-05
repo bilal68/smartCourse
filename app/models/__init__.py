@@ -16,4 +16,5 @@ __all__ = [
     "Module",
     "LearningAsset",
     "Enrollment",
+    "OutboxEvent"
 ]

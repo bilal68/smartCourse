@@ -14,6 +14,8 @@ from app.schemas.enrollment import (
     EnrollmentUpdate,
 )
 from app.tasks.enrollment_tasks import handle_enrollment_post_actions
+from datetime import datetime
+from app.models.outbox_event import OutboxEvent, OutboxStatus
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"], dependencies=[Depends(get_current_active_user)])
 
@@ -61,7 +63,22 @@ def create_enrollment(
         status=payload.status,
         source=payload.source,
     )
-
+    # kafka event for enrollment created
+    outbox = OutboxEvent(
+        event_type="enrollment.created",
+        aggregate_type="enrollment",
+        aggregate_id=enrollment.id,  # works because UUID default is set on object creation
+        payload={
+            "enrollment_id": str(enrollment.id),
+            "user_id": str(enrollment.user_id),
+            "course_id": str(enrollment.course_id),
+            "status": enrollment.status.value if hasattr(enrollment.status, "value") else str(enrollment.status),
+            "source": enrollment.source,
+            "enrolled_at": datetime.utcnow().isoformat(),
+        },
+        status=OutboxStatus.pending,
+        attempts=0,
+    )
     db.add(enrollment)
     db.commit()
     db.refresh(enrollment)

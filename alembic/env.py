@@ -4,6 +4,9 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from app.core.env import load_env
+
+load_env()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,7 +23,16 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 from app.core.config import settings
 from app.db.base import Base
-from app.models import user, role, user_role, course, module, enrollment, learning_asset  # noqa
+from app.models import (
+    user,
+    role,
+    user_role,
+    course,
+    module,
+    enrollment,
+    learning_asset,
+    outbox_event,
+)  # noqa
 
 
 target_metadata = Base.metadata
@@ -65,7 +77,6 @@ def run_migrations_online() -> None:
     from sqlalchemy import create_engine
 
     connectable = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
-
 
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)

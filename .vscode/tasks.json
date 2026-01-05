@@ -19,21 +19,28 @@
     {
       "label": "dev:celery",
       "type": "shell",
-      "command": ".\\.venv\\Scripts\\python.exe -m celery -A app.celery_app worker --loglevel=info --pool=solo",
+      "command": ".\\.venv\\Scripts\\python.exe -m celery -A app.celery_app:celery_app worker --loglevel=info --pool=solo",
       "options": {
-        "shell": {
-          "executable": "powershell.exe"
-        },
+        "shell": { "executable": "powershell.exe" },
         "cwd": "${workspaceFolder}",
-        "env": {
-          "ENV_FILE": ".env.local"
-        }
+        "env": { "ENV_FILE": ".env.local" }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:celery-beat",
+      "type": "shell",
+      "command": ".\\.venv\\Scripts\\python.exe -m celery -A app.celery_app:celery_app beat --loglevel=info",
+      "options": {
+        "shell": { "executable": "powershell.exe" },
+        "cwd": "${workspaceFolder}",
+        "env": { "ENV_FILE": ".env.local" }
       },
       "problemMatcher": []
     },
     {
       "label": "dev:all",
-      "dependsOn": ["dev:fastapi", "dev:celery"],
+      "dependsOn": ["dev:fastapi", "dev:celery", "dev:celery-beat"],
       "dependsOrder": "parallel"
     }
   ]

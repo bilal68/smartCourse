@@ -1,4 +1,5 @@
-import app.core.env
+from app.core.env import load_env
+load_env()
 from fastapi import FastAPI, Depends
 from app.api.v1.routes import api_router
 from sqlalchemy import text
