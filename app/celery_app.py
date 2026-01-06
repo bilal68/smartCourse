@@ -2,6 +2,10 @@ from app.core.env import load_env
 
 load_env()
 
+# Initialize structured logging early in the Celery process
+from app.core.logging import configure_logging
+configure_logging()
+
 from celery import Celery
 from app.core.config import settings
 from datetime import timedelta

@@ -121,8 +121,8 @@ def publish_course(course_id: UUID, db: Session = Depends(get_db), user: User = 
         )
 
     # Idempotent: if already published, just return
-    # if course.status == CourseStatus.published:
-    #     return course
+    if course.status == CourseStatus.published:
+        return course
 
     course.status = CourseStatus.published
 

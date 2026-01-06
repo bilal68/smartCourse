@@ -6,10 +6,10 @@ from app.celery_app import celery_app
 from app.db.session import SessionLocal
 from app.kafka.producer import publish_json
 from app.models.outbox_event import OutboxEvent, OutboxStatus
-import logging
+from app.core.logging import get_logger
 
 
-logger = logging.getLogger("app.tasks.outbox_tasks")
+logger = get_logger(__name__)
 
 TOPIC_MAP = {
     "course.published": "smartcourse.course-events",

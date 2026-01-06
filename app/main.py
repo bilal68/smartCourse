@@ -1,5 +1,9 @@
 from app.core.env import load_env
 load_env()
+# Initialize structured logging early
+from app.core.logging import configure_logging
+configure_logging()
+
 from fastapi import FastAPI, Depends
 from app.api.v1.routes import api_router
 from sqlalchemy import text

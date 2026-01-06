@@ -5,6 +5,9 @@ import os
 from typing import Any
 
 from confluent_kafka import Producer
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
@@ -35,4 +38,5 @@ def publish_json(topic: str, key: str, value: dict[str, Any]) -> None:
     p.flush(10)
 
     if delivery_error:
+        logger.exception("Kafka delivery failed")
         raise delivery_error[0]
