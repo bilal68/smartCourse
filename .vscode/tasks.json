@@ -19,7 +19,7 @@
     {
       "label": "dev:celery",
       "type": "shell",
-      "command": ".\\.venv\\Scripts\\python.exe -m celery -A app.celery_app:celery_app worker --loglevel=info --pool=solo",
+      "command": ".\\.venv\\Scripts\\python.exe -m celery -A app.celery_app:celery_app worker --loglevel=DEBUG --pool=solo",
       "options": {
         "shell": { "executable": "powershell.exe" },
         "cwd": "${workspaceFolder}",

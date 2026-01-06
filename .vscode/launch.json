@@ -1,30 +1,77 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "FastAPI Debug (reload)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "uvicorn",
-            "args": [
-                "app.main:app",
-                "--reload"
-            ],
-            "envFile": "${workspaceFolder}/.env.local",
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "FastAPI Debug (no reload)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "uvicorn",
-            "args": [
-                "app.main:app"
-            ],
-            "envFile": "${workspaceFolder}/.env.local",
-            "console": "integratedTerminal",
-            "justMyCode": true
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI Debug (reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--reload-dir", "app"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env.local",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": true,
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "FastAPI Debug (no reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env.local",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "Debug Kafka Consumer Worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.kafka.consumer_worker",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env.local",
+      "env": {
+        "LOG_LEVEL": "DEBUG",
+        "KAFKA_IDLE_LOG_EVERY": "5",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "Debug Celery Worker (solo)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "app.celery_app:celery_app",
+        "worker",
+        "--loglevel=DEBUG",
+        "--pool=solo"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env.local",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    }
+  ]
 }
