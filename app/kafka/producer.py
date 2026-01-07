@@ -34,6 +34,7 @@ def publish_json(topic: str, key: str, value: dict[str, Any]) -> None:
         if err is not None:
             delivery_error.append(RuntimeError(str(err)))
 
+    logger.info("publishing message", extra={"topic": topic, "key": key})
     p.produce(topic=topic, key=key.encode("utf-8"), value=payload, callback=delivery_cb)
     p.flush(10)
 

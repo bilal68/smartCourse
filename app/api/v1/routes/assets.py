@@ -13,6 +13,9 @@ from app.schemas.asset import (
     LearningAssetRead,
     LearningAssetUpdate,
 )
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["assets"], dependencies=[Depends(get_current_active_user)])
 
@@ -44,6 +47,7 @@ def create_asset(payload: LearningAssetCreate, db: Session = Depends(get_db)):
     db.add(asset)
     db.commit()
     db.refresh(asset)
+    logger.info("created asset", asset_id=str(asset.id), module_id=str(asset.module_id))
     return asset
 
 

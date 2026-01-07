@@ -15,6 +15,9 @@ from app.db.deps import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.auth import Token
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,6 +48,7 @@ def register_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    logger.info("registered user", user_id=str(user.id), email=user.email)
     return user
 
 
@@ -72,5 +76,7 @@ def login(
         subject=str(user.id),
         expires_delta=access_token_expires,
     )
+
+    logger.info("user logged in", user_id=str(user.id), email=user.email)
 
     return Token(access_token=access_token)

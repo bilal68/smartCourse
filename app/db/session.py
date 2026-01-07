@@ -7,6 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 engine = create_engine(
@@ -14,6 +17,8 @@ engine = create_engine(
     pool_pre_ping=True,
     future=True,
 )
+
+logger.info("database engine created", database=settings.DATABASE_URL)
 
 SessionLocal = sessionmaker(
     autocommit=False,

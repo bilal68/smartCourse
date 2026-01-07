@@ -8,6 +8,9 @@ from app.db.deps import get_current_active_user, get_db
 from app.models.course import Course
 from app.models.module import Module
 from app.schemas.module import ModuleCreate, ModuleRead, ModuleUpdate
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/modules", tags=["modules"],dependencies=[Depends(get_current_active_user)])
 
@@ -36,6 +39,7 @@ def create_module(payload: ModuleCreate, db: Session = Depends(get_db)):
     db.add(module)
     db.commit()
     db.refresh(module)
+    logger.info("created module", module_id=str(module.id), course_id=str(module.course_id))
     return module
 
 

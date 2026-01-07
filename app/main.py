@@ -37,3 +37,10 @@ async def health():
 def db_health_sa(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"db": "ok"}
+
+
+# Add process logger
+from app.core.logging import get_logger
+logger = get_logger(__name__)
+
+logger.info("fastapi process started")

@@ -10,6 +10,11 @@ from celery import Celery
 from app.core.config import settings
 from datetime import timedelta
 
+from app.core.logging import get_logger
+logger = get_logger(__name__)
+
+logger.info("celery process configured: broker=%s", settings.RABBITMQ_URL)
+
 celery_app = Celery(
     "app",
     broker=settings.RABBITMQ_URL,

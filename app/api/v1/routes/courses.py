@@ -10,6 +10,9 @@ from app.models.user import User
 from app.schemas.course import CourseCreate, CourseRead, CourseUpdate
 from app.models.outbox_event import OutboxEvent, OutboxStatus
 from datetime import datetime
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/courses", tags=["courses"], dependencies=[Depends(get_current_active_user)]
@@ -32,6 +35,7 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     db.add(course)
     db.commit()
     db.refresh(course)
+    logger.info("created course", course_id=str(course.id), title=course.title)
     return course
 
 
@@ -113,6 +117,8 @@ def publish_course(course_id: UUID, db: Session = Depends(get_db), user: User = 
             detail="You are not allowed to publish this course",
         )
 
+    logger.info("user requested publish", course_id=str(course_id), user_id=str(user.id))
+
     # Optional rule: must have at least 1 module to publish
     if not course.modules or len(course.modules) == 0:
         raise HTTPException(
@@ -144,4 +150,5 @@ def publish_course(course_id: UUID, db: Session = Depends(get_db), user: User = 
     db.add(outbox)
     db.commit()
     db.refresh(course)
+    logger.info("created outbox event", outbox_id=str(outbox.id), event_type=outbox.event_type)
     return course
