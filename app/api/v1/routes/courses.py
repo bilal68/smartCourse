@@ -14,9 +14,7 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(
-    prefix="/courses", tags=["courses"], dependencies=[Depends(get_current_active_user)]
-)
+router = APIRouter(prefix="/courses", tags=["courses"])
 
 
 @router.post(
@@ -24,12 +22,32 @@ router = APIRouter(
     response_model=CourseRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
+def create_course(payload: CourseCreate, db: Session = Depends(get_db), user: User = Depends(get_current_active_user)):
+    # Only users with the 'instructor' role (or 'admin') may create courses
+    role_names = [r.name for r in (user.roles or [])]
+    if "instructor" not in role_names and "admin" not in role_names:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors or admins can create courses",
+        )
+
+    # If instructor_id is provided in payload, only admin may set it to another user
+    if payload.instructor_id:
+        if "admin" not in role_names and payload.instructor_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You may not set instructor_id for other users",
+            )
+        instructor_id = payload.instructor_id
+    else:
+        # default to the authenticated instructor
+        instructor_id = user.id if "instructor" in role_names else None
+
     course = Course(
         title=payload.title,
         description=payload.description,
         status=payload.status,
-        instructor_id=payload.instructor_id,
+        instructor_id=instructor_id,
     )
 
     db.add(course)
@@ -48,8 +66,13 @@ def list_courses(
     ),
 ):
     query = db.query(Course)
+
+    # apply explicit filter when provided, otherwise return published courses
     if status_filter is not None:
         query = query.filter(Course.status == status_filter)
+    else:
+        query = query.filter(Course.status == CourseStatus.published)
+
     courses = query.order_by(Course.created_at.desc()).all()
     return courses
 
@@ -62,6 +85,11 @@ def get_course(course_id: UUID, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found",
         )
+
+    # unpublished courses are not visible via the public GET
+    if course.status != CourseStatus.published:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
     return course
 
 
@@ -70,6 +98,7 @@ def update_course(
     course_id: UUID,
     payload: CourseUpdate,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user),
 ):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
@@ -77,6 +106,10 @@ def update_course(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found",
         )
+
+    role_names = [r.name for r in (user.roles or [])]
+    if course.instructor_id and course.instructor_id != user.id and "admin" not in role_names:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not allowed to update this course")
 
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
@@ -88,13 +121,17 @@ def update_course(
 
 
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_course(course_id: UUID, db: Session = Depends(get_db)):
+def delete_course(course_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_active_user)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found",
         )
+
+    role_names = [r.name for r in (user.roles or [])]
+    if course.instructor_id and course.instructor_id != user.id and "admin" not in role_names:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not allowed to delete this course")
 
     db.delete(course)
     db.commit()
@@ -111,7 +148,8 @@ def publish_course(course_id: UUID, db: Session = Depends(get_db), user: User = 
 
     # Optional: allow only instructor owner or admin
     # Adjust this check to match your role system
-    if course.instructor_id and course.instructor_id != user.id:
+    role_names = [r.name for r in (user.roles or [])]
+    if course.instructor_id and course.instructor_id != user.id and "admin" not in role_names:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not allowed to publish this course",

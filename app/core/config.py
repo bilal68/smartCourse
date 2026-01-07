@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Ensure env file is loaded before Settings() reads environment variables
+from app.core.env import load_env
+load_env()
+
 
 class Settings(BaseSettings):
     # Pydantic v2 settings config
