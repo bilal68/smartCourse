@@ -147,7 +147,6 @@ def publish_course(course_id: UUID, db: Session = Depends(get_db), user: User = 
         )
 
     # Optional: allow only instructor owner or admin
-    # Adjust this check to match your role system
     role_names = [r.name for r in (user.roles or [])]
     if course.instructor_id and course.instructor_id != user.id and "admin" not in role_names:
         raise HTTPException(

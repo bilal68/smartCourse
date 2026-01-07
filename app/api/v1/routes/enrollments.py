@@ -1,7 +1,7 @@
 from uuid import UUID
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_current_active_user, get_db
@@ -31,7 +31,16 @@ router = APIRouter(prefix="/enrollments", tags=["enrollments"], dependencies=[De
 def create_enrollment(
     payload: EnrollmentCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
+    # Permission: students can only enroll themselves; instructors/admins can enroll others
+    role_names = [r.name for r in (current_user.roles or [])]
+    if current_user.id != payload.user_id and "instructor" not in role_names and "admin" not in role_names:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only enroll yourself; instructors/admins can enroll others",
+        )
+
     # 1) ensure user exists
     user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
@@ -83,6 +92,7 @@ def create_enrollment(
         attempts=0,
     )
     db.add(enrollment)
+    db.add(outbox)
     db.commit()
     db.refresh(enrollment)
     logger.info("created enrollment", enrollment_id=str(enrollment.id), user_id=str(enrollment.user_id), course_id=str(enrollment.course_id))
@@ -91,20 +101,21 @@ def create_enrollment(
 
 
 @router.get(
-    "/{enrollment_id}",
-    response_model=EnrollmentRead,
+    "/me",
+    response_model=List[EnrollmentRead],
 )
-def get_enrollment(
-    enrollment_id: UUID,
+def list_my_enrollments(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    enrollment = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
-    if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment not found",
-        )
-    return enrollment
+    """Get current user's enrollments."""
+    enrollments = (
+        db.query(Enrollment)
+        .filter(Enrollment.user_id == current_user.id)
+        .order_by(Enrollment.enrolled_at.desc())
+        .all()
+    )
+    return enrollments
 
 
 @router.get(
@@ -114,7 +125,16 @@ def get_enrollment(
 def list_enrollments_by_user(
     user_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
+    """Admin-only: view any user's enrollments."""
+    role_names = [r.name for r in (current_user.roles or [])]
+    if "admin" not in role_names:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can view other users' enrollments",
+        )
+    
     enrollments = (
         db.query(Enrollment)
         .filter(Enrollment.user_id == user_id)
@@ -125,13 +145,54 @@ def list_enrollments_by_user(
 
 
 @router.get(
+    "/{enrollment_id}",
+    response_model=EnrollmentRead,
+)
+def get_enrollment(
+    enrollment_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    enrollment = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
+    if not enrollment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Enrollment not found",
+        )
+    # Permission: allow owner, course instructor, or admin
+    role_names = [r.name for r in (current_user.roles or [])]
+    if (current_user.id != enrollment.user_id and 
+        current_user.id != enrollment.course.instructor_id and 
+        "admin" not in role_names):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this enrollment",
+        )
+    return enrollment
+
+
+@router.get(
     "/by-course/{course_id}",
     response_model=List[EnrollmentRead],
 )
 def list_enrollments_by_course(
     course_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
+    # Permission: allow course instructor or admin
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found",
+        )
+    role_names = [r.name for r in (current_user.roles or [])]
+    if current_user.id != course.instructor_id and "admin" not in role_names:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only course instructors and admins can view enrollments",
+        )
     enrollments = (
         db.query(Enrollment)
         .filter(Enrollment.course_id == course_id)
@@ -149,12 +210,23 @@ def update_enrollment(
     enrollment_id: UUID,
     payload: EnrollmentUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     enrollment = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
     if not enrollment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Enrollment not found",
+        )
+
+    # Permission: allow owner, course instructor, or admin
+    role_names = [r.name for r in (current_user.roles or [])]
+    if (current_user.id != enrollment.user_id and 
+        current_user.id != enrollment.course.instructor_id and 
+        "admin" not in role_names):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update this enrollment",
         )
 
     data = payload.model_dump(exclude_unset=True)
@@ -181,12 +253,23 @@ def update_enrollment(
 def delete_enrollment(
     enrollment_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     enrollment = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
     if not enrollment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Enrollment not found",
+        )
+
+    # Permission: allow owner, course instructor, or admin
+    role_names = [r.name for r in (current_user.roles or [])]
+    if (current_user.id != enrollment.user_id and 
+        current_user.id != enrollment.course.instructor_id and 
+        "admin" not in role_names):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this enrollment",
         )
 
     db.delete(enrollment)
