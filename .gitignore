@@ -208,3 +208,11 @@ marimo/_lsp/
 __marimo__/
 
 celerybeat-schedule*
+
+# Documentation files (temporary)
+ARCHITECTURE.md
+MIGRATION_SUMMARY.md
+STRUCTURE.md
+CHECKLIST.md
+QUICKSTART.md
+services/*/README.md
