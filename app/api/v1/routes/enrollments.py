@@ -13,7 +13,6 @@ from app.schemas.enrollment import (
     EnrollmentRead,
     EnrollmentUpdate,
 )
-from app.tasks.enrollment_tasks import handle_enrollment_post_actions
 from datetime import datetime
 from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.core.logging import get_logger
@@ -96,7 +95,6 @@ def create_enrollment(
     db.commit()
     db.refresh(enrollment)
     logger.info("created enrollment", enrollment_id=str(enrollment.id), user_id=str(enrollment.user_id), course_id=str(enrollment.course_id))
-    handle_enrollment_post_actions.delay(str(enrollment.id))
     return enrollment
 
 

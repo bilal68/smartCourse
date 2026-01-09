@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.celery_app import celery_app
 from app.db.session import SessionLocal
@@ -8,15 +9,15 @@ from app.kafka.producer import publish_json
 from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.core.logging import get_logger
 
-
 logger = get_logger(__name__)
 
 TOPIC_MAP = {
     "course.published": "smartcourse.course-events",
     "enrollment.created": "smartcourse.enrollment-events",
-    # later:
-    # "course.updated": "smartcourse.course-events",
+    # "asset.progress.updated": "smartcourse.progress-events",  # if you add later
 }
+
+MAX_ATTEMPTS = 5
 
 
 @celery_app.task(
@@ -27,15 +28,21 @@ TOPIC_MAP = {
     retry_kwargs={"max_retries": 5},
 )
 def publish_pending_outbox(self, batch_size: int = 50) -> dict:
-    """
-    Pull pending outbox rows from Postgres and publish them to Kafka.
-    Marks rows as published/failed so we can retry safely.
-    """
     db: Session = SessionLocal()
     try:
+        valid_types = list(TOPIC_MAP.keys())
+        if not valid_types:
+            logger.info("publish_pending_outbox: TOPIC_MAP empty")
+            return {"published": 0, "failed": 0, "checked": 0}
+
+        # Handle nullable attempts: coalesce(attempts, 0) < MAX_ATTEMPTS
         events = (
             db.query(OutboxEvent)
-            .filter(OutboxEvent.status == OutboxStatus.pending)
+            .filter(
+                OutboxEvent.status == OutboxStatus.pending,
+                OutboxEvent.event_type.in_(valid_types),
+                func.coalesce(OutboxEvent.attempts, 0) < MAX_ATTEMPTS,
+            )
             .order_by(OutboxEvent.created_at.asc())
             .limit(batch_size)
             .all()
@@ -47,33 +54,13 @@ def publish_pending_outbox(self, batch_size: int = 50) -> dict:
         logger.info("publish_pending_outbox: found %d pending events", len(events))
 
         for evt in events:
-            topic = TOPIC_MAP.get(evt.event_type)
-
-            logger.info(
-                "processing outbox id=%s event_type=%s aggregate=%s/%s",
-                evt.id,
-                evt.event_type,
-                evt.aggregate_type,
-                evt.aggregate_id,
-            )
-
-            if not topic:
-                evt.status = OutboxStatus.failed
-                evt.last_error = f"Unknown event_type: {evt.event_type}"
-                evt.attempts = (evt.attempts or 0) + 1
-                failed += 1
-                try:
-                    db.commit()
-                except Exception:
-                    logger.exception("Failed committing unknown-topic status for outbox id=%s", evt.id)
-                continue
+            topic = TOPIC_MAP[evt.event_type]  # safe because filtered
 
             try:
                 publish_json(
                     topic=topic,
                     key=str(evt.aggregate_id),
                     value={
-                        "event": evt.event_type,
                         "event_id": str(evt.id),
                         "event_type": evt.event_type,
                         "aggregate_type": evt.aggregate_type,
@@ -85,33 +72,24 @@ def publish_pending_outbox(self, batch_size: int = 50) -> dict:
                     },
                 )
 
-                # mark published and commit immediately so `updated_at` is changed
                 evt.status = OutboxStatus.published
                 evt.last_error = None
                 evt.attempts = (evt.attempts or 0) + 1
-                try:
-                    db.commit()
-                    # refresh to load updated_at from DB
-                    db.refresh(evt)
-                    logger.info(
-                        "published outbox id=%s updated_at=%s",
-                        evt.id,
-                        getattr(evt, "updated_at", None),
-                    )
-                except Exception:
-                    logger.exception("Failed committing published status for outbox id=%s", evt.id)
-
+                db.commit()
                 published += 1
+
             except Exception as e:
-                evt.status = OutboxStatus.failed
-                evt.last_error = str(e)
                 evt.attempts = (evt.attempts or 0) + 1
-                failed += 1
-                try:
-                    db.commit()
-                    db.refresh(evt)
-                except Exception:
-                    logger.exception("Failed committing failed status for outbox id=%s", evt.id)
+                evt.last_error = str(e)
+
+                # retry until MAX_ATTEMPTS, then dead-letter as failed
+                if evt.attempts >= MAX_ATTEMPTS:
+                    evt.status = OutboxStatus.failed
+                    failed += 1
+                else:
+                    evt.status = OutboxStatus.pending
+
+                db.commit()
 
         return {"published": published, "failed": failed, "checked": len(events)}
     finally:
