@@ -28,7 +28,7 @@ class CourseService:
         self,
         title: str,
         description: Optional[str],
-        status: CourseStatus,
+        course_status: CourseStatus,
         instructor_id: Optional[uuid.UUID],
         user: User,
     ) -> Course:
@@ -54,7 +54,7 @@ class CourseService:
         course = self.course_repo.create(
             title=title,
             description=description,
-            status=status,
+            status=course_status,
             instructor_id=instructor_id,
         )
         
@@ -175,3 +175,92 @@ class CourseService:
         
         logger.info("created outbox event", outbox_id=str(outbox.id), event_type=outbox.event_type)
         return course
+
+    def add_prerequisite(
+        self,
+        course_id: uuid.UUID,
+        prerequisite_id: uuid.UUID,
+        user: User,
+    ) -> Course:
+        """Add a prerequisite to a course (instructor/admin only)."""
+        course = self.get_course(course_id, public=False)
+
+        # Check authorization
+        role_names = [r.name for r in (user.roles or [])]
+        if course.instructor_id and course.instructor_id != user.id and "admin" not in role_names:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not allowed to modify this course",
+            )
+
+        # Prevent self-reference
+        if course_id == prerequisite_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A course cannot be a prerequisite of itself",
+            )
+
+        # Verify prerequisite course exists
+        prerequisite = self.course_repo.get_by_id(prerequisite_id)
+        if not prerequisite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Prerequisite course not found",
+            )
+
+        # Check if already added (idempotent)
+        if prerequisite in course.prerequisites:
+            return course
+
+        # Add prerequisite
+        course.prerequisites.append(prerequisite)
+        self.db.commit()
+        self.db.refresh(course)
+
+        logger.info(
+            "added prerequisite",
+            course_id=str(course_id),
+            prerequisite_id=str(prerequisite_id),
+        )
+        return course
+
+    def remove_prerequisite(
+        self,
+        course_id: uuid.UUID,
+        prerequisite_id: uuid.UUID,
+        user: User,
+    ) -> None:
+        """Remove a prerequisite from a course (instructor/admin only)."""
+        course = self.get_course(course_id, public=False)
+
+        # Check authorization
+        role_names = [r.name for r in (user.roles or [])]
+        if course.instructor_id and course.instructor_id != user.id and "admin" not in role_names:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not allowed to modify this course",
+            )
+
+        # Verify prerequisite course exists
+        prerequisite = self.course_repo.get_by_id(prerequisite_id)
+        if not prerequisite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Prerequisite course not found",
+            )
+
+        # Remove if present (idempotent)
+        if prerequisite in course.prerequisites:
+            course.prerequisites.remove(prerequisite)
+            self.db.commit()
+
+            logger.info(
+                "removed prerequisite",
+                course_id=str(course_id),
+                prerequisite_id=str(prerequisite_id),
+            )
+
+    def list_prerequisites(self, course_id: uuid.UUID) -> list[Course]:
+        """List all prerequisites for a course."""
+        course = self.get_course(course_id, public=True)
+        return course.prerequisites

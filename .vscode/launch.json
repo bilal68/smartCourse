@@ -7,14 +7,14 @@
       "request": "launch",
       "module": "uvicorn",
       "args": ["app.main:app", "--reload", "--reload-dir", "app"],
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/services/lms",
       "envFile": "${workspaceFolder}/.env.local",
       "console": "integratedTerminal",
       "justMyCode": true,
       "subProcess": true,
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
@@ -24,13 +24,13 @@
       "request": "launch",
       "module": "uvicorn",
       "args": ["app.main:app"],
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/services/lms",
       "envFile": "${workspaceFolder}/.env.local",
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
@@ -39,7 +39,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "app.kafka.consumer_worker",
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/services/lms",
       "console": "integratedTerminal",
       "justMyCode": true,
       "envFile": "${workspaceFolder}/.env.local",
@@ -47,7 +47,7 @@
         "LOG_LEVEL": "DEBUG",
         "KAFKA_IDLE_LOG_EVERY": "5",
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
@@ -63,13 +63,13 @@
         "--loglevel=DEBUG",
         "--pool=solo"
       ],
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/services/lms",
       "console": "integratedTerminal",
       "justMyCode": true,
       "envFile": "${workspaceFolder}/.env.local",
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     }

@@ -13,7 +13,7 @@ class EnrollmentBase(BaseModel):
 
 
 class EnrollmentCreate(EnrollmentBase):
-    user_id: UUID 
+    user_id: Optional[UUID] = None  # Optional - defaults to current user
     course_id: UUID
 
 

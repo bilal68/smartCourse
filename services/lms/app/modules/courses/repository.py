@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.modules.courses.models import Course, Module, LearningAsset, CourseStatus
 
@@ -15,8 +15,13 @@ class CourseRepository:
         self.db = db
 
     def get_by_id(self, course_id: uuid.UUID) -> Optional[Course]:
-        """Get course by ID."""
-        return self.db.query(Course).filter(Course.id == course_id).first()
+        """Get course by ID with prerequisites loaded."""
+        return (
+            self.db.query(Course)
+            .options(joinedload(Course.prerequisites))
+            .filter(Course.id == course_id)
+            .first()
+        )
 
     def list_all(self, status_filter: Optional[CourseStatus] = None) -> list[Course]:
         """List all courses with optional status filter."""

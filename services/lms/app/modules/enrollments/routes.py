@@ -36,8 +36,12 @@ def create_enrollment(
 ):
     """Create a new enrollment."""
     enrollment_service = EnrollmentService(db)
+    
+    # If user_id not provided, default to current user (students enroll themselves)
+    user_id = payload.user_id if payload.user_id else current_user.id
+    
     enrollment = enrollment_service.create_enrollment(
-        user_id=payload.user_id,
+        user_id=user_id,
         course_id=payload.course_id,
         status=payload.status,
         source=payload.source,

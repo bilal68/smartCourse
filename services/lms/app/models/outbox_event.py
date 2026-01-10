@@ -5,7 +5,8 @@ import uuid
 from typing import Any
 
 from sqlalchemy import Enum, String, Integer
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -34,7 +35,7 @@ class OutboxEvent(TimestampMixin, Base):
         UUID(as_uuid=True), nullable=False, index=True
     )
 
-    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     status: Mapped[OutboxStatus] = mapped_column(
         Enum(OutboxStatus, name="outbox_status"),

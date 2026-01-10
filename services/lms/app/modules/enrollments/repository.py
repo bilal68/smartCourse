@@ -3,9 +3,11 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modules.enrollments.models import Enrollment, EnrollmentStatus
+from app.modules.courses.models import Course
 
 
 class EnrollmentRepository:
@@ -69,3 +71,42 @@ class EnrollmentRepository:
         """Delete enrollment."""
         self.db.delete(enrollment)
         self.db.flush()
+
+    def has_completed_course(self, user_id: uuid.UUID, course_id: uuid.UUID) -> bool:
+        """Check if user has completed a specific course."""
+        enrollment = (
+            self.db.query(Enrollment)
+            .filter(
+                Enrollment.user_id == user_id,
+                Enrollment.course_id == course_id,
+                Enrollment.status == EnrollmentStatus.completed
+            )
+            .first()
+        )
+        return enrollment is not None
+
+    def get_incomplete_prerequisites(
+        self, 
+        user_id: uuid.UUID, 
+        course: Course
+    ) -> list[Course]:
+        """Get list of prerequisite courses user hasn't completed."""
+        incomplete = []
+        
+        for prereq_course in course.prerequisites:
+            if not self.has_completed_course(user_id, prereq_course.id):
+                incomplete.append(prereq_course)
+        
+        return incomplete
+
+    def count_active_enrollments(self, course_id: uuid.UUID) -> int:
+        """Count active enrollments in a course."""
+        count = (
+            self.db.query(func.count(Enrollment.id))
+            .filter(
+                Enrollment.course_id == course_id,
+                Enrollment.status == EnrollmentStatus.active
+            )
+            .scalar()
+        )
+        return count or 0

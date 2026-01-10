@@ -4,7 +4,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, Table, Text, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,17 @@ from app.db.mixins import TimestampMixin
 if TYPE_CHECKING:
     from app.modules.auth.models import User
     from app.modules.enrollments.models import Enrollment
+
+
+# Association table for course prerequisites (many-to-many)
+course_prerequisites = Table(
+    'course_prerequisites',
+    Base.metadata,
+    Column('course_id', UUID(as_uuid=True), ForeignKey('courses.id', ondelete='CASCADE'), primary_key=True),
+    Column('prerequisite_course_id', UUID(as_uuid=True), ForeignKey('courses.id', ondelete='CASCADE'), primary_key=True),
+    Column('is_mandatory', Boolean, default=True, nullable=False),
+    Column('created_at', DateTime, server_default=func.now(), nullable=False),
+)
 
 
 class CourseStatus(str, enum.Enum):
@@ -38,6 +49,9 @@ class Course(TimestampMixin, Base):
         nullable=False,
     )
 
+    # NEW: Maximum number of students allowed (NULL = unlimited)
+    max_students: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # optional: instructor "owns" the course
     instructor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -61,6 +75,15 @@ class Course(TimestampMixin, Base):
         "Enrollment",
         back_populates="course",
         cascade="all, delete-orphan",
+    )
+
+    # NEW: Prerequisites relationship (courses that must be completed before this one)
+    prerequisites: Mapped[list["Course"]] = relationship(
+        "Course",
+        secondary=course_prerequisites,
+        primaryjoin=id == course_prerequisites.c.course_id,
+        secondaryjoin=id == course_prerequisites.c.prerequisite_course_id,
+        backref="is_prerequisite_for",
     )
 
 

@@ -94,3 +94,47 @@ def publish_course(
     course_service = CourseService(db)
     course = course_service.publish_course(course_id, user)
     return course
+
+
+@router.post(
+    "/{course_id}/prerequisites/{prerequisite_id}",
+    response_model=CourseRead,
+    status_code=status.HTTP_200_OK,
+)
+def add_prerequisite(
+    course_id: UUID,
+    prerequisite_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+):
+    """Add a prerequisite to a course (instructor/admin only)."""
+    course_service = CourseService(db)
+    course = course_service.add_prerequisite(course_id, prerequisite_id, user)
+    return course
+
+
+@router.delete(
+    "/{course_id}/prerequisites/{prerequisite_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_prerequisite(
+    course_id: UUID,
+    prerequisite_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+):
+    """Remove a prerequisite from a course (instructor/admin only)."""
+    course_service = CourseService(db)
+    course_service.remove_prerequisite(course_id, prerequisite_id, user)
+    return None
+
+
+@router.get("/{course_id}/prerequisites", response_model=List[CourseRead])
+def list_prerequisites(
+    course_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """List all prerequisites for a course."""
+    course_service = CourseService(db)
+    prerequisites = course_service.list_prerequisites(course_id)
+    return prerequisites

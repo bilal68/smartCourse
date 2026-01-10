@@ -96,21 +96,67 @@ def seed(db: Session) -> None:
         ensure_user_role(db, s.id, r_student.id)
     db.flush()
 
-    # Courses
+    # Courses with prerequisites and enrollment limits
     courses = []
-    for owner, title in [
-        (inst1, "Python for Busy Developers"),
-        (inst2, "FastAPI + PostgreSQL Bootcamp"),
-    ]:
-        c = Course(
-            id=uuid4(),
-            instructor_id=owner.id,
-            title=title,
-            description=f"{title} — seeded demo course.",
-            status=CourseStatus.published,
-        )
-        db.add(c)
-        courses.append(c)
+    
+    # Basic course - no prerequisites, no limit
+    python_basics = Course(
+        id=uuid4(),
+        instructor_id=inst1.id,
+        title="Python Basics",
+        description="Introduction to Python programming - perfect for beginners.",
+        status=CourseStatus.published,
+        max_students=None,  # unlimited enrollment
+    )
+    db.add(python_basics)
+    courses.append(python_basics)
+    
+    # Intermediate course - requires Python Basics, limited enrollment
+    python_advanced = Course(
+        id=uuid4(),
+        instructor_id=inst1.id,
+        title="Advanced Python",
+        description="Deep dive into advanced Python concepts - requires Python Basics.",
+        status=CourseStatus.published,
+        max_students=3,  # limited to 3 students for testing
+    )
+    db.add(python_advanced)
+    courses.append(python_advanced)
+    
+    # Another basic course - no prerequisites, limited enrollment
+    fastapi_intro = Course(
+        id=uuid4(),
+        instructor_id=inst2.id,
+        title="FastAPI Introduction",
+        description="Learn to build REST APIs with FastAPI.",
+        status=CourseStatus.published,
+        max_students=5,  # limited enrollment
+    )
+    db.add(fastapi_intro)
+    courses.append(fastapi_intro)
+    
+    # Advanced course - requires both prerequisites
+    fullstack_course = Course(
+        id=uuid4(),
+        instructor_id=inst2.id,
+        title="Full-Stack Development with FastAPI",
+        description="Build complete applications - requires both Python and FastAPI knowledge.",
+        status=CourseStatus.published,
+        max_students=2,
+    )
+    db.add(fullstack_course)
+    courses.append(fullstack_course)
+    
+    db.flush()
+    
+    # Set up prerequisite relationships
+    # Advanced Python requires Python Basics
+    python_advanced.prerequisites.append(python_basics)
+    
+    # Full-Stack requires both Python Basics and FastAPI Introduction
+    fullstack_course.prerequisites.append(python_basics)
+    fullstack_course.prerequisites.append(fastapi_intro)
+    
     db.flush()
 
     # Modules + Assets
@@ -166,63 +212,128 @@ def seed(db: Session) -> None:
             ])
             db.flush()
 
-    # Enrollments
+    # Enrollments with prerequisite test scenarios
     now = datetime.utcnow()
     enrollments = []
-    for s in students:
-        c = random.choice(courses)
-        e = Enrollment(
-            id=uuid4(),
-            user_id=s.id,
-            course_id=c.id,
-            status=EnrollmentStatus.active,
-            enrolled_at=now - timedelta(days=random.randint(1, 14)),
-        )
-        db.add(e)
-        enrollments.append(e)
+    
+    # Student 1: Completed Python Basics (can enroll in Advanced Python)
+    e1 = Enrollment(
+        id=uuid4(),
+        user_id=students[0].id,
+        course_id=python_basics.id,
+        status=EnrollmentStatus.completed,
+        enrolled_at=now - timedelta(days=30),
+        completed_at=now - timedelta(days=15),
+    )
+    db.add(e1)
+    enrollments.append(e1)
+    
+    # Student 2: Completed Python Basics (can enroll in Advanced Python)
+    e2 = Enrollment(
+        id=uuid4(),
+        user_id=students[1].id,
+        course_id=python_basics.id,
+        status=EnrollmentStatus.completed,
+        enrolled_at=now - timedelta(days=25),
+        completed_at=now - timedelta(days=10),
+    )
+    db.add(e2)
+    enrollments.append(e2)
+    
+    # Student 3: Currently learning Python Basics (cannot enroll in Advanced Python yet)
+    e3 = Enrollment(
+        id=uuid4(),
+        user_id=students[2].id,
+        course_id=python_basics.id,
+        status=EnrollmentStatus.active,
+        enrolled_at=now - timedelta(days=5),
+    )
+    db.add(e3)
+    enrollments.append(e3)
+    
+    # Student 4: No enrollments (cannot enroll in Advanced Python - missing prerequisite)
+    
+    # Student 1: Also completed FastAPI Introduction (can enroll in Full-Stack)
+    e4 = Enrollment(
+        id=uuid4(),
+        user_id=students[0].id,
+        course_id=fastapi_intro.id,
+        status=EnrollmentStatus.completed,
+        enrolled_at=now - timedelta(days=20),
+        completed_at=now - timedelta(days=5),
+    )
+    db.add(e4)
+    enrollments.append(e4)
+    
+    # Student 2: Currently learning FastAPI (cannot enroll in Full-Stack yet)
+    e5 = Enrollment(
+        id=uuid4(),
+        user_id=students[1].id,
+        course_id=fastapi_intro.id,
+        status=EnrollmentStatus.active,
+        enrolled_at=now - timedelta(days=3),
+    )
+    db.add(e5)
+    enrollments.append(e5)
 
     db.flush()
 
     # create progress and optional certificates
     for e in enrollments:
-        percent = random.choice([10.0, 35.0, 60.0, 100.0])
+        # For completed enrollments, set 100% progress
+        if e.status == EnrollmentStatus.completed:
+            percent = 100.0
+        else:
+            # For active enrollments, random progress
+            percent = random.choice([10.0, 35.0, 60.0])
+            
         cp = CourseProgress(
             id=uuid4(),
             enrollment_id=e.id,
             percent_complete=percent,
             started_at=e.enrolled_at,
-            completed_at=now if percent == 100.0 else None,
+            completed_at=e.completed_at if e.status == EnrollmentStatus.completed else None,
         )
         db.add(cp)
 
-        if percent == 100.0:
-            e.status = EnrollmentStatus.completed
-            e.completed_at = now
+        if e.status == EnrollmentStatus.completed:
             db.add(Certificate(
                 id=uuid4(),
                 enrollment_id=e.id,
                 serial_no=f"CERT-{uuid4().hex[:10].upper()}",
                 certificate_url="https://example.com/demo/cert.pdf",
-                issued_at=now,
+                issued_at=e.completed_at or now,
             ))
 
         # optionally add asset-level progress for some assets in the course
         assets = db.query(LearningAsset).filter(LearningAsset.module_id.in_(
             db.query(Module.id).filter(Module.course_id == e.course_id)
         )).all()
-        for a in random.sample(assets, k=min(len(assets), random.randint(0, 2))):
-            ap = AssetProgress(
-                id=uuid4(),
-                asset_id=a.id,
-                enrollment_id=e.id,
-                percent_complete=random.choice([0.0, 25.0, 50.0, 100.0]),
-                started_at=e.enrolled_at,
-                completed_at=now if random.choice([False, True]) else None,
-            )
-            db.add(ap)
+        if assets:
+            for a in random.sample(assets, k=min(len(assets), random.randint(0, 2))):
+                ap = AssetProgress(
+                    id=uuid4(),
+                    asset_id=a.id,
+                    enrollment_id=e.id,
+                    percent_complete=random.choice([0.0, 25.0, 50.0, 100.0]),
+                    started_at=e.enrolled_at,
+                    completed_at=now if random.choice([False, True]) else None,
+                )
+                db.add(ap)
 
     db.commit()
     print("✅ Seed completed.")
+    print(f"   - Created {len(courses)} courses with prerequisites:")
+    print(f"     * '{python_basics.title}' (no prerequisites, unlimited)")
+    print(f"     * '{python_advanced.title}' (requires Python Basics, max 3 students)")
+    print(f"     * '{fastapi_intro.title}' (no prerequisites, max 5 students)")
+    print(f"     * '{fullstack_course.title}' (requires Python Basics + FastAPI, max 2 students)")
+    print(f"   - Created {len(students)} students with test scenarios:")
+    print(f"     * student1@smartcourse.dev: Completed Python Basics & FastAPI (can enroll in Full-Stack)")
+    print(f"     * student2@smartcourse.dev: Completed Python Basics, learning FastAPI (can enroll in Advanced Python)")
+    print(f"     * student3@smartcourse.dev: Learning Python Basics (cannot enroll in Advanced Python yet)")
+    print(f"     * student4@smartcourse.dev: No enrollments (missing prerequisites)")
+    print(f"     * student5@smartcourse.dev: No enrollments (missing prerequisites)")
 
 
 def main():

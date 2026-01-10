@@ -4,7 +4,8 @@ import uuid
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Integer, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -28,6 +29,6 @@ class ContentChunk(TimestampMixin, Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     asset: Mapped["LearningAsset"] = relationship("LearningAsset", backref="chunks")
