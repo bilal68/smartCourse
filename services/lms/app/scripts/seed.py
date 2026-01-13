@@ -16,7 +16,7 @@ from app.modules.courses.models import Course, CourseStatus, Module, LearningAss
 from app.modules.enrollments.models import Enrollment, EnrollmentStatus
 from app.modules.progress.models import CourseProgress, AssetProgress
 from app.models.certificate import Certificate
-from app.models.content_chunk import ContentChunk
+from app.models.content_chunk import ContentChunk  # DEPRECATED - kept for cleanup
 from app.db.mixins import TimestampMixin
 
 ROLE_ADMIN = "admin"
@@ -58,8 +58,9 @@ def ensure_user_role(db: Session, user_id, role_id) -> None:
 
 def reset_data(db: Session) -> None:
     # Adjust order to avoid FK violations
+    # Note: ContentChunk removed - now handled by AI service
     for model in [
-        ContentChunk,
+        # ContentChunk,  # DEPRECATED - now handled by AI service
         AssetProgress,
         Certificate,
         CourseProgress,
@@ -99,7 +100,7 @@ def seed(db: Session) -> None:
     # Courses with prerequisites and enrollment limits
     courses = []
     
-    # Basic course - no prerequisites, no limit
+    # Basic course - PUBLISHED (for prerequisite testing)
     python_basics = Course(
         id=uuid4(),
         instructor_id=inst1.id,
@@ -111,51 +112,59 @@ def seed(db: Session) -> None:
     db.add(python_basics)
     courses.append(python_basics)
     
-    # Intermediate course - requires Python Basics, limited enrollment
-    python_advanced = Course(
+    # DRAFT course - for testing publishing workflow
+    machine_learning = Course(
         id=uuid4(),
         instructor_id=inst1.id,
-        title="Advanced Python",
-        description="Deep dive into advanced Python concepts - requires Python Basics.",
-        status=CourseStatus.published,
-        max_students=3,  # limited to 3 students for testing
+        title="Introduction to Machine Learning",
+        description="A comprehensive course covering the fundamentals of machine learning algorithms and applications.",
+        status=CourseStatus.draft,  # DRAFT STATUS for testing
+        max_students=10,
     )
-    db.add(python_advanced)
-    courses.append(python_advanced)
+    db.add(machine_learning)
+    courses.append(machine_learning)
     
-    # Another basic course - no prerequisites, limited enrollment
+    # Another DRAFT course - for testing publishing workflow
     fastapi_intro = Course(
         id=uuid4(),
         instructor_id=inst2.id,
         title="FastAPI Introduction",
-        description="Learn to build REST APIs with FastAPI.",
-        status=CourseStatus.published,
-        max_students=5,  # limited enrollment
+        description="Learn to build REST APIs with FastAPI - comprehensive hands-on course.",
+        status=CourseStatus.draft,  # DRAFT STATUS for testing
+        max_students=5,
     )
     db.add(fastapi_intro)
     courses.append(fastapi_intro)
     
-    # Advanced course - requires both prerequisites
+    # DRAFT Advanced course - for testing complex workflows
     fullstack_course = Course(
         id=uuid4(),
         instructor_id=inst2.id,
         title="Full-Stack Development with FastAPI",
-        description="Build complete applications - requires both Python and FastAPI knowledge.",
-        status=CourseStatus.published,
+        description="Build complete applications with modern web technologies - comprehensive project-based learning.",
+        status=CourseStatus.draft,  # DRAFT STATUS for testing
         max_students=2,
     )
     db.add(fullstack_course)
     courses.append(fullstack_course)
     
+    # One more PUBLISHED course for variety
+    data_science = Course(
+        id=uuid4(),
+        instructor_id=inst1.id,
+        title="Data Science Fundamentals",
+        description="Learn data analysis, visualization, and basic statistics.",
+        status=CourseStatus.published,
+        max_students=8,
+    )
+    db.add(data_science)
+    courses.append(data_science)
+    
     db.flush()
     
     # Set up prerequisite relationships
-    # Advanced Python requires Python Basics
-    python_advanced.prerequisites.append(python_basics)
-    
-    # Full-Stack requires both Python Basics and FastAPI Introduction
+    # Full-Stack requires Python Basics (published course as prerequisite)
     fullstack_course.prerequisites.append(python_basics)
-    fullstack_course.prerequisites.append(fastapi_intro)
     
     db.flush()
 
@@ -204,14 +213,9 @@ def seed(db: Session) -> None:
             db.add_all([text, video, pdf])
             db.flush()
 
-            # create content chunks for text/article asset
-            db.add_all([
-                ContentChunk(id=uuid4(), asset_id=text.id, chunk_index=1, chunk_text="Chunk 1: goals", token_count=3, extra={}, created_at=datetime.utcnow()),
-                ContentChunk(id=uuid4(), asset_id=text.id, chunk_index=2, chunk_text="Chunk 2: concepts", token_count=3, extra={}, created_at=datetime.utcnow()),
-                ContentChunk(id=uuid4(), asset_id=text.id, chunk_index=3, chunk_text="Chunk 3: examples", token_count=3, extra={}, created_at=datetime.utcnow()),
-            ])
-            db.flush()
-
+            # Note: ContentChunk creation removed - now handled by AI service when course is published
+            # The AI service will process these assets and create chunks in its own database
+            
     # Enrollments with prerequisite test scenarios
     now = datetime.utcnow()
     enrollments = []
@@ -323,17 +327,19 @@ def seed(db: Session) -> None:
 
     db.commit()
     print("✅ Seed completed.")
-    print(f"   - Created {len(courses)} courses with prerequisites:")
-    print(f"     * '{python_basics.title}' (no prerequisites, unlimited)")
-    print(f"     * '{python_advanced.title}' (requires Python Basics, max 3 students)")
-    print(f"     * '{fastapi_intro.title}' (no prerequisites, max 5 students)")
-    print(f"     * '{fullstack_course.title}' (requires Python Basics + FastAPI, max 2 students)")
+    print(f"   - Created {len(courses)} courses for testing:")
+    print(f"     * '{python_basics.title}' (PUBLISHED - no prerequisites, unlimited)")
+    print(f"     * '{machine_learning.title}' (DRAFT - ready to test publishing, max 10 students)")
+    print(f"     * '{fastapi_intro.title}' (DRAFT - ready to test publishing, max 5 students)")
+    print(f"     * '{fullstack_course.title}' (DRAFT - requires Python Basics, max 2 students)")
+    print(f"     * '{data_science.title}' (PUBLISHED - no prerequisites, max 8 students)")
     print(f"   - Created {len(students)} students with test scenarios:")
-    print(f"     * student1@smartcourse.dev: Completed Python Basics & FastAPI (can enroll in Full-Stack)")
-    print(f"     * student2@smartcourse.dev: Completed Python Basics, learning FastAPI (can enroll in Advanced Python)")
-    print(f"     * student3@smartcourse.dev: Learning Python Basics (cannot enroll in Advanced Python yet)")
-    print(f"     * student4@smartcourse.dev: No enrollments (missing prerequisites)")
-    print(f"     * student5@smartcourse.dev: No enrollments (missing prerequisites)")
+    print(f"     * student1@smartcourse.dev: Completed Python Basics (can test enrollments)")
+    print(f"     * student2@smartcourse.dev: Completed Python Basics (can test enrollments)")
+    print(f"     * student3@smartcourse.dev: Learning Python Basics (progress testing)")
+    print(f"     * student4@smartcourse.dev: No enrollments (fresh user for testing)")
+    print(f"     * student5@smartcourse.dev: No enrollments (fresh user for testing)")
+    print("   - 🚀 READY TO TEST: Use draft courses to test complete publishing workflow!")
 
 
 def main():

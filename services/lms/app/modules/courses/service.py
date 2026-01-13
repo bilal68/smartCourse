@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.courses.models import Course, Module, LearningAsset, CourseStatus
+from app.modules.courses.models import Course, Module, LearningAsset, CourseStatus, CourseProcessingStatus
 from app.modules.courses.repository import CourseRepository, ModuleRepository, LearningAssetRepository
 from app.modules.auth.models import User
 from app.models.outbox_event import OutboxEvent, OutboxStatus
@@ -127,7 +127,7 @@ class CourseService:
         self.db.commit()
 
     def publish_course(self, course_id: uuid.UUID, user: User) -> Course:
-        """Publish a course and emit outbox event."""
+        """Publish a course and emit outbox event with course data for AI processing."""
         course = self.get_course(course_id, public=False)
 
         # Check authorization
@@ -152,8 +152,27 @@ class CourseService:
             return course
 
         course.status = CourseStatus.published
+        course.processing_status = CourseProcessingStatus.not_started  # Reset processing status
 
-        # Create outbox event
+        # Collect course data for AI service
+        course_data = {
+            "course_id": str(course.id),
+            "assets": []
+        }
+        
+        # Collect all assets from all modules
+        for module in course.modules:
+            for asset in module.assets:
+                course_data["assets"].append({
+                    "id": str(asset.id),
+                    "title": asset.title,
+                    "asset_type": asset.asset_type.value,
+                    "source_url": asset.source_url,
+                    "module_id": str(module.id),
+                    "module_title": module.title
+                })
+
+        # Create outbox event with course data for AI service
         outbox = OutboxEvent(
             event_type="course.published",
             aggregate_type="course",
@@ -164,6 +183,7 @@ class CourseService:
                 "description": course.description,
                 "instructor_id": str(course.instructor_id) if course.instructor_id else None,
                 "published_at": datetime.utcnow().isoformat(),
+                "course_data": course_data  # Include assets for AI processing
             },
             status=OutboxStatus.pending,
             attempts=0,
@@ -173,7 +193,12 @@ class CourseService:
         self.db.commit()
         self.db.refresh(course)
         
-        logger.info("created outbox event", outbox_id=str(outbox.id), event_type=outbox.event_type)
+        logger.info(
+            "created outbox event for course publishing", 
+            outbox_id=str(outbox.id), 
+            event_type=outbox.event_type,
+            asset_count=len(course_data["assets"])
+        )
         return course
 
     def add_prerequisite(

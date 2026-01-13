@@ -7,7 +7,7 @@ from app.modules.enrollments.routes import router as enrollments_router
 from app.modules.progress.routes import router as progress_router
 
 # Keep old routes for modules and assets (can be migrated later)
-from app.api.v1.routes import modules, assets, celery_test
+from app.api.v1.routes import modules, assets, celery_test, content
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -16,4 +16,5 @@ api_router.include_router(modules.router)
 api_router.include_router(assets.router)
 api_router.include_router(enrollments_router)
 api_router.include_router(progress_router)
+api_router.include_router(content.router)
 api_router.include_router(celery_test.router)

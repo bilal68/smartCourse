@@ -33,6 +33,14 @@ class CourseStatus(str, enum.Enum):
     archived = "archived"
 
 
+class CourseProcessingStatus(str, enum.Enum):
+    """Status of content processing after course is published"""
+    not_started = "not_started"  # Course published but processing not started
+    processing = "processing"    # Currently processing content (chunking, etc.)
+    ready = "ready"             # Processing complete, course ready for students
+    failed = "failed"           # Processing failed with errors
+
+
 class Course(TimestampMixin, Base):
     __tablename__ = "courses"
 
@@ -48,6 +56,19 @@ class Course(TimestampMixin, Base):
         server_default=CourseStatus.draft.value,
         nullable=False,
     )
+
+    # Content processing status (tracks async content chunking/indexing)
+    processing_status: Mapped[CourseProcessingStatus] = mapped_column(
+        Enum(CourseProcessingStatus, name="course_processing_status"),
+        server_default=CourseProcessingStatus.not_started.value,
+        nullable=False,
+    )
+    
+    # Error message if processing failed
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Timestamp when processing completed (successfully or failed)
+    processed_at: Mapped[DateTime | None] = mapped_column(DateTime, nullable=True)
 
     # NEW: Maximum number of students allowed (NULL = unlimited)
     max_students: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -18,6 +18,7 @@ dnspython==2.8.0
 ecdsa==0.19.1
 email-validator==2.3.0
 fastapi==0.124.0
+httpx==0.25.2
 greenlet==3.3.0
 h11==0.16.0
 httptools==0.7.1
@@ -54,3 +55,6 @@ vine==5.1.0
 watchfiles==1.1.1
 wcwidth==0.2.14
 websockets==15.0.1
+
+# AWS S3 integration (optional - for production with real S3)
+boto3==1.35.98

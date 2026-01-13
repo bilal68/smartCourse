@@ -1,0 +1,902 @@
+{
+	"info": {
+		"name": "SmartCourse API Collection",
+		"description": "Complete API collection for testing SmartCourse microservices including LMS and AI services",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{instructor_email}}\",\n    \"full_name\": \"{{instructor_name}}\",\n    \"password\": \"{{instructor_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/auth/register",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Extract access token from response",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('access_token', response.access_token);",
+									"    console.log('Access token stored:', response.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{instructor_email}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{instructor_password}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/auth/login",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Courses",
+			"item": [
+				{
+					"name": "Create Course",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Store course ID for subsequent requests",
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('course_id', response.id);",
+									"    console.log('Course ID stored:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"{{course_title}}\",\n    \"description\": \"{{course_description}}\",\n    \"status\": \"draft\"\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/courses",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Courses",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/courses",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Course by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"{{course_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Course",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"{{course_title}} - Updated\",\n    \"description\": \"{{course_description}} - Updated\"\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"{{course_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Publish Course",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}/publish",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"{{course_id}}",
+								"publish"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Course",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"{{course_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Modules",
+			"item": [
+				{
+					"name": "Create Module",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Store module ID for subsequent requests",
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('module_id', response.id);",
+									"    console.log('Module ID stored:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"course_id\": \"{{course_id}}\",\n    \"title\": \"{{module_title}}\",\n    \"description\": \"{{module_description}}\",\n    \"order_index\": 1\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/modules",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"modules"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Modules by Course",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/modules/by-course/{{course_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"modules",
+								"by-course",
+								"{{course_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Module by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/modules/{{module_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"modules",
+								"{{module_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Module",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"{{module_title}} - Updated\",\n    \"description\": \"{{module_description}} - Updated\",\n    \"order_index\": 1\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/modules/{{module_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"modules",
+								"{{module_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Module",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/modules/{{module_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"modules",
+								"{{module_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Learning Assets",
+			"item": [
+				{
+					"name": "Create Learning Asset",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Store asset ID for subsequent requests",
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('asset_id', response.id);",
+									"    console.log('Asset ID stored:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"module_id\": \"{{module_id}}\",\n    \"title\": \"{{asset_title}}\",\n    \"description\": \"{{asset_description}}\",\n    \"asset_type\": \"{{asset_type}}\",\n    \"source_url\": \"{{asset_source_url}}\",\n    \"order_index\": 1,\n    \"duration_seconds\": 300\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/assets",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"assets"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Assets by Module",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/assets/by-module/{{module_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"assets",
+								"by-module",
+								"{{module_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Asset by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"assets",
+								"{{asset_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Asset",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"{{asset_title}} - Updated\",\n    \"description\": \"{{asset_description}} - Updated\",\n    \"asset_type\": \"{{asset_type}}\",\n    \"source_url\": \"{{asset_source_url}}\",\n    \"order_index\": 1,\n    \"duration_seconds\": 450\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"assets",
+								"{{asset_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Asset",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"assets",
+								"{{asset_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Enrollments",
+			"item": [
+				{
+					"name": "Create Enrollment (Student)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Store enrollment ID for subsequent requests",
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('enrollment_id', response.id);",
+									"    console.log('Enrollment ID stored:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": \"{{student_user_id}}\",\n    \"course_id\": \"{{course_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/enrollments",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"enrollments"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Enrollments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/enrollments/user/{{student_user_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"enrollments",
+								"user",
+								"{{student_user_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Course Enrollments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/enrollments/course/{{course_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"enrollments",
+								"course",
+								"{{course_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Enrollment Status",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/enrollments/{{enrollment_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"enrollments",
+								"{{enrollment_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Progress Tracking",
+			"item": [
+				{
+					"name": "Update Asset Progress",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"enrollment_id\": \"{{enrollment_id}}\",\n    \"progress_percent\": 75.5,\n    \"is_completed\": false,\n    \"time_spent_seconds\": 225\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/progress/assets/{{asset_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"progress",
+								"assets",
+								"{{asset_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Complete Asset Progress",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"enrollment_id\": \"{{enrollment_id}}\",\n    \"progress_percent\": 100.0,\n    \"is_completed\": true,\n    \"time_spent_seconds\": 300\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/progress/assets/{{asset_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"progress",
+								"assets",
+								"{{asset_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Course Progress",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/progress/courses/{{course_id}}/enrollment/{{enrollment_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"progress",
+								"courses",
+								"{{course_id}}",
+								"enrollment",
+								"{{enrollment_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Asset Progress",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/progress/assets/{{asset_id}}/enrollment/{{enrollment_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"progress",
+								"assets",
+								"{{asset_id}}",
+								"enrollment",
+								"{{enrollment_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "AI Service",
+			"item": [
+				{
+					"name": "AI Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{ai_base_url}}/health",
+							"host": [
+								"{{ai_base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "AI Service Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{ai_base_url}}/",
+							"host": [
+								"{{ai_base_url}}"
+							],
+							"path": [
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Celery Testing",
+			"item": [
+				{
+					"name": "Test Async Task",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"message\": \"Hello from Postman!\",\n    \"delay\": 5\n}"
+						},
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/celery-test/async-task",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"celery-test",
+								"async-task"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{lms_base_url}}/api/v1/celery-test/task-status/{{task_id}}",
+							"host": [
+								"{{lms_base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"celery-test",
+								"task-status",
+								"{{task_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "lms_base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "ai_base_url", 
+			"value": "http://localhost:8001",
+			"type": "string"
+		}
+	]
+}

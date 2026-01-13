@@ -2,16 +2,95 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "FastAPI Debug (reload)",
+      "name": "LMS FastAPI Service",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["app.main:app", "--reload", "--reload-dir", "app"],
+      "args": ["app.main:app", "--reload", "--reload-dir", "app", "--port", "8000"],
       "cwd": "${workspaceFolder}/services/lms",
       "envFile": "${workspaceFolder}/.env.local",
       "console": "integratedTerminal",
       "justMyCode": true,
       "subProcess": true,
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "AI FastAPI Service",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--reload-dir", "app", "--port", "8001"],
+      "cwd": "${workspaceFolder}/services/ai",
+      "envFile": "${workspaceFolder}/services/ai/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": true,
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/ai",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "LMS Kafka Consumer",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.integrations.kafka.consumer_worker",
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env.local",
+      "env": {
+        "LOG_LEVEL": "DEBUG",
+        "KAFKA_IDLE_LOG_EVERY": "5",
+        "KAFKA_TOPIC": "course.events",
+        "KAFKA_GROUP_ID": "lms-service-group",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "LMS Celery Worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "app.celery_app:celery_app",
+        "worker",
+        "--loglevel=DEBUG",
+        "--pool=solo"
+      ],
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env.local",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "LMS Celery Beat",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "app.celery_app:celery_app",
+        "beat",
+        "--loglevel=INFO"
+      ],
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env.local",
       "env": {
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": "${workspaceFolder}/services/lms",
@@ -33,44 +112,35 @@
         "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
-    },
+    }
+  ],
+  "compounds": [
     {
-      "name": "Debug Kafka Consumer Worker",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "app.kafka.consumer_worker",
-      "cwd": "${workspaceFolder}/services/lms",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env.local",
-      "env": {
-        "LOG_LEVEL": "DEBUG",
-        "KAFKA_IDLE_LOG_EVERY": "5",
-        "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}/services/lms",
-        "PYDEVD_USE_FRAME_EVAL": "NO"
+      "name": "All Services",
+      "configurations": [
+        "LMS FastAPI Service",
+        "AI FastAPI Service",
+        "LMS Kafka Consumer",
+        "LMS Celery Worker",
+        "LMS Celery Beat"
+      ],
+      "stopAll": true,
+      "preLaunchTask": "${command:workbench.action.tasks.runTask}",
+      "presentation": {
+        "hidden": false,
+        "group": "microservices"
       }
     },
     {
-      "name": "Debug Celery Worker (solo)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "celery",
-      "args": [
-        "-A",
-        "app.celery_app:celery_app",
-        "worker",
-        "--loglevel=DEBUG",
-        "--pool=solo"
+      "name": "Core Services (LMS + AI)",
+      "configurations": [
+        "LMS FastAPI Service",
+        "AI FastAPI Service"
       ],
-      "cwd": "${workspaceFolder}/services/lms",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env.local",
-      "env": {
-        "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}/services/lms",
-        "PYDEVD_USE_FRAME_EVAL": "NO"
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "microservices"
       }
     }
   ]

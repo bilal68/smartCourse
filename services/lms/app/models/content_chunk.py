@@ -1,3 +1,11 @@
+"""
+DEPRECATED: ContentChunk model - moved to AI service.
+
+This model is now handled by the AI service in its own database.
+Content chunks are stored in smartcourse_ai database and accessed via AI service API.
+This model remains for backward compatibility with existing migrations.
+"""
+
 from __future__ import annotations
 
 import uuid
@@ -16,6 +24,7 @@ if TYPE_CHECKING:
 
 
 class ContentChunk(TimestampMixin, Base):
+    """DEPRECATED: Content chunk model - moved to AI service."""
     __tablename__ = "content_chunks"
 
     id: Mapped[uuid.UUID] = mapped_column(

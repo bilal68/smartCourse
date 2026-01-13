@@ -9,10 +9,17 @@ from app.integrations.kafka.producer import publish_json
 from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.core.logging import get_logger
 
+# Import all models to ensure SQLAlchemy mappings are registered
+from app.modules.auth.models import User, Role, UserRole
+from app.modules.courses.models import Course, Module, LearningAsset
+from app.modules.enrollments.models import Enrollment
+from app.modules.progress.models import CourseProgress, AssetProgress
+# Note: ContentChunk removed - now handled by AI service
+
 logger = get_logger(__name__)
 
 TOPIC_MAP = {
-    "course.published": "smartcourse.course-events",
+    "course.published": "course.events",  # Changed to unified topic
     "enrollment.created": "smartcourse.enrollment-events",
     # "asset.progress.updated": "smartcourse.progress-events",  # if you add later
 }
