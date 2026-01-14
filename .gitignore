@@ -229,3 +229,4 @@ htmlcov/
 
 # VS Code settings (uncomment if you want to ignore)
 .vscode/
+storage/

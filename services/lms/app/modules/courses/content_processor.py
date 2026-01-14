@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 
 from app.models.content_chunk import ContentChunk
-from app.models.learning_asset import LearningAsset, AssetType
+from app.modules.courses.models import LearningAsset, AssetType
 from app.integrations.s3 import get_s3_client
 from app.core.logging import get_logger
 
@@ -141,7 +141,12 @@ class ContentProcessor:
             Content as string
         """
         try:
-            content_bytes = self.s3_client.get_object(key)
+            response = self.s3_client.get_object(key)
+            # Handle both dict (DummyS3Client) and bytes (real S3) responses
+            if isinstance(response, dict):
+                content_bytes = response['Body']
+            else:
+                content_bytes = response
             content = content_bytes.decode('utf-8')
             return content
         except Exception as e:
