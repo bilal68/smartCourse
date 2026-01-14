@@ -28,9 +28,9 @@ class AIKafkaProducer:
         """Publish content processing completed event."""
         event = {
             "event_id": str(uuid.uuid4()),
-            "event_type": "content.processed",
-            "course_id": course_id,
-            "result": processing_result,
+            "event_type": "course.processing_completed",  # Match what LMS workflow expects
+            "aggregate_id": course_id,  # Match LMS event structure
+            "payload": processing_result,
             "service": "ai-service",
             "timestamp": str(uuid.uuid1().time)
         }
@@ -38,9 +38,9 @@ class AIKafkaProducer:
         try:
             self.producer.send('course.events', event)
             self.producer.flush()
-            logger.info(f"Published content processed event, course_id={course_id}")
+            logger.info(f"Published course processing completed event, course_id={course_id}")
         except KafkaError as e:
-            logger.error(f"Failed to publish content processed event, course_id={course_id}, error={str(e)}")
+            logger.error(f"Failed to publish course processing completed event, course_id={course_id}, error={str(e)}")
     
     def close(self):
         """Close the producer."""

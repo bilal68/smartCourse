@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = "dummy_secret_key"
     AWS_S3_BUCKET: str = "smartcourse-dev"
     AWS_REGION: str = "us-east-1"
-    S3_STORAGE_PATH: str = "./storage/s3"  # For dummy S3
+    S3_STORAGE_PATH: str = os.getenv("S3_STORAGE_PATH", "./storage/s3")  # For dummy S3
     
     # Logging
     LOG_LEVEL: str = "INFO"

@@ -69,7 +69,7 @@ def start_consumer() -> None:
             group_id=GROUP_ID,
             auto_offset_reset='earliest',
             enable_auto_commit=True,
-            consumer_timeout_ms=int(POLL_TIMEOUT * 1000),
+            # No consumer_timeout_ms: iterator will block indefinitely waiting for messages
             value_deserializer=lambda m: m  # We'll decode manually
         )
     except Exception as e:

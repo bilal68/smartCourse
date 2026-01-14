@@ -31,10 +31,10 @@ class DummyS3Client:
             import shutil
             shutil.copy2(file_path, dest_path)
             
-            logger.debug("File uploaded to dummy S3", key=key, dest=str(dest_path))
+            logger.debug(f"File uploaded to dummy S3, key={key}, dest={str(dest_path)}")
             return True
         except Exception as e:
-            logger.error("Failed to upload file to dummy S3", key=key, error=str(e))
+            logger.error(f"Failed to upload file to dummy S3, key={key}, error={str(e)}")
             return False
     
     def download_file(self, key: str, file_path: str) -> bool:
@@ -42,7 +42,7 @@ class DummyS3Client:
         try:
             src_path = self.storage_path / key
             if not src_path.exists():
-                logger.warning("File not found in dummy S3", key=key)
+                logger.warning(f"File not found in dummy S3, key={key}")
                 return False
             
             # Ensure destination directory exists
@@ -52,10 +52,10 @@ class DummyS3Client:
             import shutil
             shutil.copy2(src_path, file_path)
             
-            logger.debug("File downloaded from dummy S3", key=key, dest=file_path)
+            logger.debug(f"File downloaded from dummy S3, key={key}, dest={file_path}")
             return True
         except Exception as e:
-            logger.error("Failed to download file from dummy S3", key=key, error=str(e))
+            logger.error(f"Failed to download file from dummy S3, key={key}, error={str(e)}")
             return False
     
     def get_object(self, key: str) -> bytes:
@@ -73,10 +73,10 @@ class DummyS3Client:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_bytes(body)
             
-            logger.debug("Object stored in dummy S3", key=key, size=len(body))
+            logger.debug(f"Object stored in dummy S3, key={key}, size={len(body)}")
             return True
         except Exception as e:
-            logger.error("Failed to store object in dummy S3", key=key, error=str(e))
+            logger.error(f"Failed to store object in dummy S3, key={key}, error={str(e)}")
             return False
     
     def delete_object(self, key: str) -> bool:
@@ -85,10 +85,10 @@ class DummyS3Client:
             dest_path = self.storage_path / key
             if dest_path.exists():
                 dest_path.unlink()
-                logger.debug("Object deleted from dummy S3", key=key)
+                logger.debug(f"Object deleted from dummy S3, key={key}")
             return True
         except Exception as e:
-            logger.error("Failed to delete object from dummy S3", key=key, error=str(e))
+            logger.error(f"Failed to delete object from dummy S3, key={key}, error={str(e)}")
             return False
     
     def list_objects(self, prefix: str = "") -> List[Dict[str, Any]]:
@@ -116,7 +116,7 @@ class DummyS3Client:
                             "LastModified": stat.st_mtime
                         })
         except Exception as e:
-            logger.error("Failed to list objects in dummy S3", prefix=prefix, error=str(e))
+            logger.error(f"Failed to list objects in dummy S3, prefix={prefix}, error={str(e)}")
         
         return objects
     
@@ -158,7 +158,7 @@ class S3Client:
                 )
                 return True
             except ClientError as e:
-                logger.error("Failed to upload file to S3", key=key, error=str(e))
+                logger.error(f"Failed to upload file to S3, key={key}, error={str(e)}")
                 return False
     
     def download_file(self, key: str, file_path: str) -> bool:
@@ -174,7 +174,7 @@ class S3Client:
                 )
                 return True
             except ClientError as e:
-                logger.error("Failed to download file from S3", key=key, error=str(e))
+                logger.error(f"Failed to download file from S3, key={key}, error={str(e)}")
                 return False
     
     def get_object(self, key: str) -> bytes:
@@ -189,7 +189,7 @@ class S3Client:
                 )
                 return response['Body'].read()
             except ClientError as e:
-                logger.error("Failed to get object from S3", key=key, error=str(e))
+                logger.error(f"Failed to get object from S3, key={key}, error={str(e)}")
                 raise
     
     def put_object(self, key: str, body: bytes, content_type: str = None) -> bool:
@@ -210,7 +210,7 @@ class S3Client:
                 )
                 return True
             except ClientError as e:
-                logger.error("Failed to put object to S3", key=key, error=str(e))
+                logger.error(f"Failed to put object to S3, key={key}, error={str(e)}")
                 return False
     
     def delete_object(self, key: str) -> bool:
@@ -225,7 +225,7 @@ class S3Client:
                 )
                 return True
             except ClientError as e:
-                logger.error("Failed to delete object from S3", key=key, error=str(e))
+                logger.error(f"Failed to delete object from S3, key={key}, error={str(e)}")
                 return False
     
     def list_objects(self, prefix: str = "") -> List[Dict[str, Any]]:
@@ -240,7 +240,7 @@ class S3Client:
                 )
                 return response.get('Contents', [])
             except ClientError as e:
-                logger.error("Failed to list objects in S3", prefix=prefix, error=str(e))
+                logger.error(f"Failed to list objects in S3, prefix={prefix}, error={str(e)}")
                 return []
     
     def generate_presigned_url(self, key: str, expires_in: int = 3600) -> str:
@@ -255,7 +255,7 @@ class S3Client:
                     ExpiresIn=expires_in
                 )
             except ClientError as e:
-                logger.error("Failed to generate presigned URL", key=key, error=str(e))
+                logger.error(f"Failed to generate presigned URL, key={key}, error={str(e)}")
                 return ""
 
 

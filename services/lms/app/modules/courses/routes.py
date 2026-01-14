@@ -85,14 +85,14 @@ def delete_course(
 
 
 @router.post("/{course_id}/publish", response_model=CourseRead)
-def publish_course(
+async def publish_course(
     course_id: UUID,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_active_user),
 ):
     """Publish a course and emit an outbox event."""
     course_service = CourseService(db)
-    course = course_service.publish_course(course_id, user)
+    course = await course_service.publish_course(course_id, user)
     return course
 
 

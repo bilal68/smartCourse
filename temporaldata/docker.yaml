@@ -1,0 +1,8 @@
+# Docker configuration for Temporal
+system.enableLogLevelUpdate: 
+  - value: true
+    constraints: {}
+
+history.maxAutoResetPoints:
+  - value: 20
+    constraints: {}

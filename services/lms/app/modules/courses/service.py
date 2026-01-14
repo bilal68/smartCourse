@@ -126,8 +126,10 @@ class CourseService:
         self.course_repo.delete(course)
         self.db.commit()
 
-    def publish_course(self, course_id: uuid.UUID, user: User) -> Course:
-        """Publish a course and emit outbox event with course data for AI processing."""
+    async def publish_course(self, course_id: uuid.UUID, user: User) -> Course:
+        """Publish a course and start Temporal workflow for AI processing."""
+        from app.workflows.temporal_utils import start_publish_course_workflow
+        
         course = self.get_course(course_id, public=False)
 
         # Check authorization
@@ -151,12 +153,15 @@ class CourseService:
         if course.status == CourseStatus.published:
             return course
 
-        course.status = CourseStatus.published
-        course.processing_status = CourseProcessingStatus.not_started  # Reset processing status
+        # Don't change status here - let the workflow handle it!
+        # Just prepare course data for the workflow
 
         # Collect course data for AI service
         course_data = {
             "course_id": str(course.id),
+            "title": course.title,
+            "description": course.description,
+            "instructor_id": str(course.instructor_id) if course.instructor_id else None,
             "assets": []
         }
         
@@ -172,33 +177,30 @@ class CourseService:
                     "module_title": module.title
                 })
 
-        # Create outbox event with course data for AI service
-        outbox = OutboxEvent(
-            event_type="course.published",
-            aggregate_type="course",
-            aggregate_id=course.id,
-            payload={
-                "course_id": str(course.id),
-                "title": course.title,
-                "description": course.description,
-                "instructor_id": str(course.instructor_id) if course.instructor_id else None,
-                "published_at": datetime.utcnow().isoformat(),
-                "course_data": course_data  # Include assets for AI processing
-            },
-            status=OutboxStatus.pending,
-            attempts=0,
-        )
-
-        self.db.add(outbox)
-        self.db.commit()
-        self.db.refresh(course)
+        # Start Temporal workflow - it will handle ALL status changes
+        try:
+            workflow_result = await start_publish_course_workflow(
+                course_id=course.id,
+                course_data=course_data
+            )
+            logger.info(
+                "Started Temporal workflow for course publishing",
+                workflow_id=workflow_result["workflow_id"],
+                course_id=str(course_id),
+                asset_count=len(course_data["assets"])
+            )
+            
+            # Refresh course to get updated status from workflow's first activity
+            self.db.refresh(course)
+            return course
+            
+        except Exception as e:
+            logger.error(f"Failed to start Temporal workflow: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to start workflow: {str(e)}"
+            )
         
-        logger.info(
-            "created outbox event for course publishing", 
-            outbox_id=str(outbox.id), 
-            event_type=outbox.event_type,
-            asset_count=len(course_data["assets"])
-        )
         return course
 
     def add_prerequisite(

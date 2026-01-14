@@ -200,17 +200,17 @@ class ContentProcessingHandler:
     def _generate_course_analysis(self, db, course_id: UUID, results: Dict[str, Any]):
         """Generate AI-powered course analysis and insights."""
         from app.models.course_analysis import CourseAnalysis
+        from datetime import datetime
         
         # This would integrate with AI models to analyze course content
         # For now, create a placeholder analysis
         
-        analysis = CourseAnalysis(
-            course_id=course_id,
-            summary="AI-generated course summary would go here",
-            key_topics=["Topic 1", "Topic 2", "Topic 3"],  # Extracted by AI
-            difficulty_score=7.5,  # Calculated by AI model
-            estimated_duration="2-3 hours"  # Based on content length
-        )
+        analysis_data = {
+            "summary": "AI-generated course summary would go here",
+            "key_topics": ["Topic 1", "Topic 2", "Topic 3"],  # Extracted by AI
+            "difficulty_score": 7.5,  # Calculated by AI model
+            "estimated_duration": "2-3 hours"  # Based on content length
+        }
         
         # Upsert (update or insert)
         existing = db.query(CourseAnalysis).filter(
@@ -218,12 +218,21 @@ class ContentProcessingHandler:
         ).first()
         
         if existing:
-            existing.summary = analysis.summary
-            existing.key_topics = analysis.key_topics
-            existing.difficulty_score = analysis.difficulty_score
-            existing.estimated_duration = analysis.estimated_duration
-            existing.updated_at = analysis.created_at
+            # Update existing analysis; SQLAlchemy will auto-set updated_at via onupdate
+            existing.summary = analysis_data["summary"]
+            existing.key_topics = analysis_data["key_topics"]
+            existing.difficulty_score = analysis_data["difficulty_score"]
+            existing.estimated_duration = analysis_data["estimated_duration"]
+            existing.updated_at = datetime.utcnow()  # Explicitly set updated_at
         else:
+            # Create new analysis
+            analysis = CourseAnalysis(
+                course_id=course_id,
+                summary=analysis_data["summary"],
+                key_topics=analysis_data["key_topics"],
+                difficulty_score=analysis_data["difficulty_score"],
+                estimated_duration=analysis_data["estimated_duration"]
+            )
             db.add(analysis)
         
         db.commit()

@@ -152,11 +152,16 @@ class ContentProcessor:
             Content as string
         """
         try:
-            content_bytes = self.s3_client.get_object(key)
+            response = self.s3_client.get_object(key)
+            # Handle both dict (DummyS3Client) and bytes (real S3) responses
+            if isinstance(response, dict):
+                content_bytes = response['Body']
+            else:
+                content_bytes = response
             content = content_bytes.decode('utf-8')
             return content
         except Exception as e:
-            logger.error("Failed to read from S3", key=key, error=str(e))
+            logger.error(f"Failed to read from S3, key={key}, error={str(e)}", exc_info=True)
             raise
     
     def _chunk_content(self, content: str, asset: Dict[str, Any]) -> List[Dict[str, Any]]:

@@ -58,3 +58,5 @@ websockets==15.0.1
 
 # AWS S3 integration (optional - for production with real S3)
 boto3==1.35.98
+# Temporal workflow orchestration for distributed fault-tolerant processing
+temporalio==1.4.0

@@ -98,6 +98,38 @@
       }
     },
     {
+      "name": "LMS Temporal Worker (No Debug)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/services/lms/run_temporal_worker.py",
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "noDebug": true,
+      "envFile": "${workspaceFolder}/.env.local",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms"
+      }
+    },
+    {
+      "name": "LMS Temporal Worker (With Debug)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/services/lms/run_temporal_worker.py",
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env.local",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
+        "PYDEVD_USE_FRAME_EVAL": "NO",
+        "PYDEVD_DISABLE_FILE_VALIDATION": "1",
+        "PYDEVD_USE_CYTHON": "NO"
+      }
+    },
+    {
       "name": "FastAPI Debug (no reload)",
       "type": "debugpy",
       "request": "launch",
@@ -116,16 +148,29 @@
   ],
   "compounds": [
     {
+      "name": "Event-Driven Flow (For Testing)",
+      "configurations": [
+        "LMS FastAPI Service",
+        "LMS Temporal Worker (No Debug)",
+        "AI FastAPI Service"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "microservices"
+      }
+    },
+    {
       "name": "All Services",
       "configurations": [
         "LMS FastAPI Service",
+        "LMS Temporal Worker (No Debug)",
         "AI FastAPI Service",
         "LMS Kafka Consumer",
         "LMS Celery Worker",
         "LMS Celery Beat"
       ],
       "stopAll": true,
-      "preLaunchTask": "${command:workbench.action.tasks.runTask}",
       "presentation": {
         "hidden": false,
         "group": "microservices"
