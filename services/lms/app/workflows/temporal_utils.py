@@ -34,8 +34,10 @@ async def start_publish_course_workflow(
     """
     Start the publish course workflow.
     
+    IMPORTANT: workflow_id = str(course_id) so Kafka consumer can signal it.
+    
     Args:
-        course_id: ID of the course to publish
+        course_id: ID of the course to publish (also used as workflow_id)
         course_data: Course data to include in workflow
     
     Returns:
@@ -44,7 +46,9 @@ async def start_publish_course_workflow(
     try:
         client = await get_temporal_client()
         
-        workflow_id = f"publish-course-{course_id}"
+        # Use course_id directly as workflow_id (no prefix)
+        # This allows Kafka consumer to signal: workflow_id = course_id
+        workflow_id = str(course_id)
         
         # Start workflow execution with idempotency
         try:
@@ -53,7 +57,7 @@ async def start_publish_course_workflow(
                 args=[str(course_id), course_data],
                 id=workflow_id,
                 task_queue="course-publishing",
-                execution_timeout=timedelta(minutes=5),
+                execution_timeout=timedelta(minutes=15),  # Increased to 15 min (signal wait = 10 min)
             )
         except WorkflowAlreadyStartedError:
             # Workflow already running, get existing handle
@@ -75,6 +79,57 @@ async def start_publish_course_workflow(
         
     except Exception as e:
         logger.error(f"Failed to start workflow: {str(e)}", exc_info=True)
+        raise
+
+
+async def signal_ai_processing_done(
+    course_id: str,
+    success: bool,
+    chunks_created: int = 0,
+    error_message: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Signal the PublishCourseWorkflow that AI processing is complete.
+    
+    Called by LMS Kafka consumer when 'course.processing_completed' or 
+    'course.processing_failed' event is received.
+    
+    Args:
+        course_id: The course ID (also the workflow_id)
+        success: True if AI processing succeeded, False if failed
+        chunks_created: Number of chunks created (if success)
+        error_message: Error description (if failure)
+    
+    Returns:
+        Dictionary with signal status
+    """
+    try:
+        client = await get_temporal_client()
+        
+        # workflow_id = course_id (set in start_publish_course_workflow)
+        workflow_id = str(course_id)
+        handle = client.get_workflow_handle(workflow_id)
+        
+        # Send signal with result data
+        signal_data = {
+            "success": success,
+            "course_id": course_id,
+            "chunks_created": chunks_created,
+            "error_message": error_message
+        }
+        
+        await handle.signal("ai_processing_done", signal_data)
+        
+        logger.info(f"📨 Sent ai_processing_done signal to workflow_id={workflow_id}, success={success}")
+        
+        return {
+            "workflow_id": workflow_id,
+            "signal_sent": True,
+            "success": success
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to signal workflow: {str(e)}", exc_info=True)
         raise
 
 

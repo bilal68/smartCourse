@@ -47,6 +47,7 @@ class User(TimestampMixin, Base):
         "Role",
         secondary="user_roles",
         back_populates="users",
+        overlaps="user_roles",
     )
 
     enrollments: Mapped[list["Enrollment"]] = relationship(
@@ -76,6 +77,7 @@ class Role(TimestampMixin, Base):
         "User",
         secondary="user_roles",
         back_populates="roles",
+        overlaps="user_roles",
     )
 
 
@@ -100,5 +102,5 @@ class UserRole(TimestampMixin, Base):
         nullable=False,
     )
 
-    user: Mapped["User"] = relationship("User", backref="user_roles")
-    role: Mapped["Role"] = relationship("Role", backref="user_roles")
+    user: Mapped["User"] = relationship("User", backref="user_roles", overlaps="roles,users")
+    role: Mapped["Role"] = relationship("Role", backref="user_roles", overlaps="roles,users")

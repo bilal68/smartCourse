@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 
 TOPIC_MAP = {
     "course.published": "course.events",  # Changed to unified topic
+    "course.ready": "course.events",      # Final state event for Notification + Analytics
     "enrollment.created": "smartcourse.enrollment-events",
     # "asset.progress.updated": "smartcourse.progress-events",  # if you add later
 }
