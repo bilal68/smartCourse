@@ -16,7 +16,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.storage.s3_client import get_s3_client
 from app.db.session import SessionLocal
-from app.modules.courses.models import Course, Module, LearningAsset, AssetStatus
+from app.modules.courses.models import Course, Module, LearningAsset, AssetStatus, CourseStatus
+from app.modules.auth.models import User  # Import User to resolve relationship
+from app.modules.enrollments.models import Enrollment  # Import Enrollment to resolve relationship
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -159,7 +161,7 @@ def seed_content_for_course(course_id: str, dry_run: bool = False):
         for module in course.modules:
             logger.info(f"  Module: {module.title}")
             
-            for asset in module.learning_assets:
+            for asset in module.assets:
                 # Only seed article assets that don't have content yet
                 if asset.asset_type.value != "article":
                     logger.info(f"    Skipping {asset.title} (type: {asset.asset_type.value})")
