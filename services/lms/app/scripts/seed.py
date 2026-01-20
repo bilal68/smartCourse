@@ -16,7 +16,7 @@ from app.modules.courses.models import Course, CourseStatus, Module, LearningAss
 from app.modules.enrollments.models import Enrollment, EnrollmentStatus
 from app.modules.progress.models import CourseProgress, AssetProgress
 from app.models.certificate import Certificate
-from app.models.content_chunk import ContentChunk  # DEPRECATED - kept for cleanup
+# Note: ContentChunk removed - now handled by AI service in smartcourse_ai database
 from app.db.mixins import TimestampMixin
 
 ROLE_ADMIN = "admin"
