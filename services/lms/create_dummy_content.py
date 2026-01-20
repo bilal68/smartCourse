@@ -1,12 +1,160 @@
 #!/usr/bin/env python3
-"""Create dummy course content files in local S3 storage"""
+"""Create dummy course content files in local S3 storage
+
+Usage:
+  python create_dummy_content.py                    # Create content for all predefined courses
+  python create_dummy_content.py <course_id>        # Create generic content for specific course ID
+  python create_dummy_content.py --all-courses      # Fetch all courses from DB and create content
+"""
 
 import os
+import sys
 import json
+import argparse
 from pathlib import Path
 
 # Storage path from config
 STORAGE_PATH = "./storage/s3"
+
+
+def create_generic_course_content(course_id: str, course_title: str = "Course"):
+    """Create generic content for any course ID"""
+    
+    course_path = Path(STORAGE_PATH) / course_id
+    course_path.mkdir(parents=True, exist_ok=True)
+    
+    modules_data = [
+        {
+            "title": "Getting Started",
+            "content": f"""# Getting Started with {course_title}
+
+Welcome to this comprehensive course! This module will introduce you to the fundamental concepts.
+
+## What You'll Learn
+- Core principles and foundational knowledge
+- Best practices and industry standards
+- Hands-on exercises and practical applications
+- Real-world examples and case studies
+
+## Prerequisites
+No prior experience required! We'll start from the basics and build up your knowledge step by step.
+
+## Course Structure
+This course is divided into three main modules:
+1. Getting Started (this module)
+2. Core Concepts
+3. Final Project
+
+Let's begin your learning journey!
+"""
+        },
+        {
+            "title": "Core Concepts",
+            "content": f"""# Core Concepts of {course_title}
+
+Now that you've completed the introduction, let's dive into the core concepts.
+
+## Key Topics
+
+### Topic 1: Fundamentals
+Understanding the fundamental principles is crucial for mastering this subject:
+- Basic terminology and definitions
+- Important frameworks and methodologies
+- Common patterns and anti-patterns
+
+### Topic 2: Intermediate Techniques
+Once you grasp the basics, we'll move on to more advanced techniques:
+- Optimization strategies
+- Best practices for production environments
+- Performance considerations
+
+### Topic 3: Advanced Patterns
+Finally, we'll cover some advanced patterns used by industry experts:
+- Design patterns and architecture
+- Scalability and maintainability
+- Testing and debugging strategies
+
+## Practical Exercises
+Throughout this module, you'll complete hands-on exercises that build practical skills.
+"""
+        },
+        {
+            "title": "Project",
+            "content": f"""# {course_title} - Final Project
+
+Congratulations on making it to the final module! Time to apply everything you've learned.
+
+## Project Overview
+Build a complete project that demonstrates your mastery of the concepts covered.
+
+## Project Requirements
+Your project should include:
+1. Implementation of core concepts from Module 2
+2. Best practices for code organization
+3. Proper error handling and validation
+4. Comprehensive documentation
+5. Testing and quality assurance
+
+## Getting Started
+
+### Step 1: Planning
+- Define your project scope and objectives
+- Create a project timeline
+- Identify required resources
+
+### Step 2: Implementation
+- Set up your development environment
+- Implement core functionality
+- Add error handling
+- Write tests for your code
+
+### Step 3: Testing and Refinement
+- Run comprehensive tests
+- Fix any bugs or issues
+- Optimize performance
+
+### Step 4: Documentation
+- Write clear documentation
+- Include usage examples
+
+## Next Steps
+After completing this course:
+- Take advanced courses in related topics
+- Build your own portfolio projects
+- Join community forums and discussions
+
+Congratulations on completing {course_title}!
+"""
+        }
+    ]
+    
+    # Create module content
+    for idx, module_data in enumerate(modules_data):
+        module_path = course_path / f"module_{idx + 1}"
+        module_path.mkdir(exist_ok=True)
+        
+        # Save content as markdown
+        with open(module_path / "content.md", "w") as f:
+            f.write(module_data["content"])
+        
+        # Save metadata
+        with open(module_path / "metadata.json", "w") as f:
+            json.dump({
+                "title": module_data["title"],
+                "order": idx + 1,
+                "content_length": len(module_data["content"])
+            }, f, indent=2)
+    
+    # Save course metadata
+    with open(course_path / "metadata.json", "w") as f:
+        json.dump({
+            "course_id": course_id,
+            "title": course_title,
+            "modules_count": len(modules_data)
+        }, f, indent=2)
+    
+    return course_path, len(modules_data)
+
 
 def create_dummy_content():
     """Create dummy content files for seeded courses"""
@@ -554,7 +702,78 @@ Use the built-in docs at /docs to test all endpoints!
         print(f"   - Location: {course_path}")
         print(f"   - Modules: {len(course_data['modules'])}")
 
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Create dummy course content in local S3 storage",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Create content for all predefined courses
+  python create_dummy_content.py
+  
+  # Create generic content for a specific course ID
+  python create_dummy_content.py 7efb7678-731a-4349-8766-64b410cdf75d
+  
+  # Create content for a course with custom title
+  python create_dummy_content.py 7efb7678-731a-4349-8766-64b410cdf75d --title "Advanced Python"
+  
+  # Fetch courses from database and create content
+  python create_dummy_content.py --all-courses
+        """
+    )
+    parser.add_argument('course_id', nargs='?', help='Course ID to create content for')
+    parser.add_argument('--title', help='Course title (for custom course ID)')
+    parser.add_argument('--all-courses', action='store_true', help='Create content for all courses in database')
+    
+    args = parser.parse_args()
+    
+    if args.all_courses:
+        # Fetch all courses from database
+        try:
+            os.environ.setdefault('PYTHONPATH', os.getcwd())
+            from app.db.session import SessionLocal
+            from app.modules.courses.models import Course
+            
+            db = SessionLocal()
+            try:
+                courses = db.query(Course).all()
+                print(f"Found {len(courses)} courses in database")
+                
+                for course in courses:
+                    course_path, module_count = create_generic_course_content(
+                        str(course.id), 
+                        course.title
+                    )
+                    print(f"✅ Created content for: {course.title}")
+                    print(f"   - ID: {course.id}")
+                    print(f"   - Location: {course_path}")
+                    print(f"   - Modules: {module_count}")
+                
+                print(f"\n✅ All course content created successfully!")
+                print(f"📁 Storage location: {STORAGE_PATH}")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"❌ Error fetching courses from database: {e}")
+            print("   Make sure you're in the LMS directory and database is accessible")
+            sys.exit(1)
+            
+    elif args.course_id:
+        # Create content for specific course ID
+        course_title = args.title or "Course"
+        course_path, module_count = create_generic_course_content(args.course_id, course_title)
+        print(f"✅ Created content for: {course_title}")
+        print(f"   - ID: {args.course_id}")
+        print(f"   - Location: {course_path}")
+        print(f"   - Modules: {module_count}")
+        print(f"\n📁 Storage location: {STORAGE_PATH}")
+    else:
+        # Create predefined course content
+        create_dummy_content()
+        print("\n✅ All predefined course content created successfully!")
+        print(f"📁 Storage location: {STORAGE_PATH}")
+
+
 if __name__ == "__main__":
-    create_dummy_content()
-    print("\n✅ All course content created successfully!")
-    print(f"📁 Storage location: {STORAGE_PATH}")
+    main()

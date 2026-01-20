@@ -4,7 +4,7 @@ services:
   # ============================================
   # INFRASTRUCTURE SERVICES
   # ============================================
-  
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: smartcourse-postgres
@@ -106,6 +106,41 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
 
+  minio:
+    image: minio/minio:latest
+    container_name: smartcourse-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    volumes:
+      - smartcourse_miniodata:/data
+    command: server /data --console-address ":9001"
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: smartcourse-minio-init
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      until /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin123 2>/dev/null; do
+        sleep 2;
+      done;
+
+      /usr/bin/mc mb myminio/smartcourse-dev --ignore-existing;
+
+      # OPTIONAL: public read (sirf dev me)
+      # /usr/bin/mc anonymous set download myminio/smartcourse-dev;
+
+      echo 'MinIO init done (bucket: smartcourse-dev)';
+      "
+
   # ============================================
   # APPLICATION SERVICES
   # ============================================
@@ -120,6 +155,7 @@ services:
       - postgres
       - redis
       - kafka
+      - minio
     ports:
       - "8000:8000"
     environment:
@@ -129,6 +165,13 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_REGION: us-east-1
+      S3_BUCKET: smartcourse-dev
+      S3_USE_SSL: "false"
+      S3_PRESIGN_EXPIRES_SECONDS: "600"
     volumes:
       - ../services/lms:/app
 
@@ -144,12 +187,20 @@ services:
       - redis
       - rabbitmq
       - kafka
+      - minio
     environment:
       DATABASE_URL: postgresql://smartcourse:password@postgres:5432/smartcourse_lms
       REDIS_URL: redis://redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_REGION: us-east-1
+      S3_BUCKET: smartcourse-dev
+      S3_USE_SSL: "false"
+      S3_PRESIGN_EXPIRES_SECONDS: "600"
     volumes:
       - ../services/lms:/app
 
@@ -164,10 +215,18 @@ services:
       - postgres
       - redis
       - rabbitmq
+      - minio
     environment:
       DATABASE_URL: postgresql://smartcourse:password@postgres:5432/smartcourse_lms
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_REGION: us-east-1
+      S3_BUCKET: smartcourse-dev
+      S3_USE_SSL: "false"
+      S3_PRESIGN_EXPIRES_SECONDS: "600"
     volumes:
       - ../services/lms:/app
 
@@ -228,3 +287,4 @@ volumes:
   smartcourse_zkdata:
   smartcourse_zklog:
   smartcourse_kafkadata:
+  smartcourse_miniodata:

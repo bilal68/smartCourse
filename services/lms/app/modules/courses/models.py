@@ -4,7 +4,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, Table, Text, DateTime, func
+from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, Table, Text, DateTime, func, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -148,6 +148,28 @@ class AssetType(str, enum.Enum):
     other = "other"
 
 
+class AssetStatus(str, enum.Enum):
+    """Upload and validation status of asset content"""
+    draft = "draft"                    # Just metadata, no content
+    upload_pending = "upload_pending"  # Signed URL generated, waiting for upload
+    uploaded = "uploaded"              # File in S3, not yet validated
+    ready = "ready"                    # Validated and ready for students
+    rejected = "rejected"              # Validation failed
+    archived = "archived"              # Soft deleted
+
+
+class ContentFormat(str, enum.Enum):
+    """Format of content stored in S3"""
+    editor_json = "EDITOR_JSON"        # Rich editor JSON format
+
+
+class StorageProvider(str, enum.Enum):
+    """Storage provider for content"""
+    s3 = "S3"
+    minio = "MINIO"
+    local = "LOCAL"
+
+
 class LearningAsset(TimestampMixin, Base):
     __tablename__ = "learning_assets"
 
@@ -171,7 +193,7 @@ class LearningAsset(TimestampMixin, Base):
         nullable=False,
     )
 
-    # actual resource location (S3, CDN, external URL, etc.)
+    # actual resource location (S3, CDN, external URL, etc.) - for non-ARTICLE types
     source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     # ordering within the module
@@ -179,6 +201,31 @@ class LearningAsset(TimestampMixin, Base):
 
     # video/audio length (optional)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # === NEW FIELDS FOR ARTICLE CONTENT UPLOADS ===
+    
+    # Upload and validation status
+    status: Mapped[AssetStatus] = mapped_column(
+        Enum(AssetStatus, name="asset_status"),
+        server_default=AssetStatus.draft.value,
+        nullable=False,
+        index=True,
+    )
+
+    # Content storage details
+    content_format: Mapped[str] = mapped_column(String(50), default="EDITOR_JSON", nullable=False)
+    storage_provider: Mapped[str] = mapped_column(String(50), default="S3", nullable=False)
+    bucket: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    key: Mapped[str | None] = mapped_column(String(1024), nullable=True, index=True)
+
+    # Upload validation
+    expected_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SHA256 hex
+    
+    # Versioning and error tracking
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    validation_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     module: Mapped["Module"] = relationship(
         "Module",

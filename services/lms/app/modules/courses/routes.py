@@ -24,13 +24,11 @@ def create_course(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_active_user),
 ):
-    """Create a new course."""
+    """Create a new course. Instructor ID and status (draft) are automatically set from authenticated user."""
     course_service = CourseService(db)
     course = course_service.create_course(
         title=payload.title,
         description=payload.description,
-        status=payload.status,
-        instructor_id=payload.instructor_id,
         user=user,
     )
     return course

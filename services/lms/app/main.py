@@ -4,21 +4,34 @@ load_env()
 from app.core.logging import configure_logging
 configure_logging()
 
-from fastapi import FastAPI, Depends
-from app.api.v1.routes import api_router
+from fastapi import FastAPI, Depends, APIRouter
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 import time
 import datetime
 from dotenv import load_dotenv
-from sqlalchemy import text
 from app.db.deps import get_db
+
+# Import routers from modules
+from app.modules.auth.routes import router as auth_router
+from app.modules.courses.routes import router as courses_router
+from app.modules.courses.upload_routes import router as upload_router
+from app.modules.enrollments.routes import router as enrollments_router
+from app.modules.progress.routes import router as progress_router
 
 app = FastAPI(title="smartCourse API")
 load_dotenv()
 # Record process start time for uptime reporting
 _START_TIME = time.time()
+
+# Create main API router
+api_router = APIRouter()
+api_router.include_router(auth_router)
+api_router.include_router(courses_router)
+api_router.include_router(upload_router)
+api_router.include_router(enrollments_router)
+api_router.include_router(progress_router)
 
 app.include_router(api_router, prefix="/api/v1")
 @app.get("/health")

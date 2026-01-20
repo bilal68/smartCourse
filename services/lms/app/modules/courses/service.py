@@ -28,8 +28,6 @@ class CourseService:
         self,
         title: str,
         description: Optional[str],
-        course_status: CourseStatus,
-        instructor_id: Optional[uuid.UUID],
         user: User,
     ) -> Course:
         """Create a new course with authorization checks."""
@@ -41,20 +39,14 @@ class CourseService:
                 detail="Only instructors or admins can create courses",
             )
 
-        # Handle instructor_id assignment
-        if instructor_id:
-            if "admin" not in role_names and instructor_id != user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You may not set instructor_id for other users",
-                )
-        else:
-            instructor_id = user.id if "instructor" in role_names else None
+        # Courses always start as draft - cannot be created in any other state
+        # Progress through: draft → published → (optionally archived)
+        instructor_id = user.id
 
         course = self.course_repo.create(
             title=title,
             description=description,
-            status=course_status,
+            status=CourseStatus.draft,
             instructor_id=instructor_id,
         )
         
