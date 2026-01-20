@@ -21,8 +21,9 @@ class ContentProcessor:
     
     def __init__(self):
         self.s3_client = get_s3_client()
-        self.chunk_size_words = settings.CHUNK_SIZE_WORDS
-        self.chunk_overlap_words = settings.CHUNK_OVERLAP_WORDS
+        # Convert character-based chunk size to approximate word count (avg 5 chars per word)
+        self.chunk_size_words = settings.CHUNK_SIZE // 5
+        self.chunk_overlap_words = settings.CHUNK_OVERLAP // 5
     
     def process_course_assets(self, course_data: Dict[str, Any]) -> Dict[str, Any]:
         """

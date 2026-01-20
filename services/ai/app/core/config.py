@@ -15,13 +15,30 @@ class Settings(BaseSettings):
         "postgresql://smartcourse:password@127.0.0.1:5432/smartcourse_ai"
     )
     
-    # Kafka
+    # Kafka Configuration
     KAFKA_BOOTSTRAP_SERVERS: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     KAFKA_GROUP_ID: str = "ai-service-group"
+    KAFKA_COURSE_TOPIC: str = "courses"
+    KAFKA_AI_TOPIC: str = "ai"
     
-    # Content Processing
-    CHUNK_SIZE_WORDS: int = 500
-    CHUNK_OVERLAP_WORDS: int = 50
+    # OpenAI Configuration for RAG
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OPENAI_EMBEDDING_DIMENSION: int = 1536
+    OPENAI_CHAT_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_TEMPERATURE: float = 0.7
+    OPENAI_MAX_TOKENS: int = 500
+    
+    # Content Chunking Configuration
+    CHUNK_SIZE: int = 1000  # Characters per chunk
+    CHUNK_OVERLAP: int = 100  # Character overlap between chunks
+    
+    # Retrieval Configuration
+    RETRIEVAL_TOP_K: int = 5  # Number of chunks to retrieve for RAG
+    SIMILARITY_THRESHOLD: float = 0.3  # Minimum cosine similarity score
+    
+    # Embedding Batch Configuration
+    EMBEDDING_BATCH_SIZE: int = 100  # Texts per batch to OpenAI API
     
     # S3 Settings (shared with LMS)
     USE_DUMMY_S3: bool = True
