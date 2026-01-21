@@ -20,7 +20,7 @@ class EmbeddingService:
     def __init__(self):
         self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = settings.OPENAI_EMBEDDING_MODEL
-        self.dimension = settings.EMBEDDING_DIMENSION
+        self.dimension = settings.OPENAI_EMBEDDING_DIMENSION
         
     @retry(
         stop=stop_after_attempt(3),

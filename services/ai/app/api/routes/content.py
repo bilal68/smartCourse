@@ -120,7 +120,7 @@ async def semantic_search(
     
     # Basic text search (replace with vector search later)
     chunks = (
-        query.filter(ContentChunk.chunk_text.ilike(f"%{search_request.query}%"))
+        query.filter(ContentChunk.content.ilike(f"%{search_request.query}%"))  # Fixed: content instead of chunk_text
         .limit(search_request.limit)
         .all()
     )
@@ -133,7 +133,7 @@ async def semantic_search(
             chunk_id=chunk.id,
             course_id=chunk.course_id,
             asset_id=chunk.asset_id,
-            chunk_text=chunk.chunk_text,
+            content=chunk.content,  # Fixed: content instead of chunk_text
             similarity_score=0.8,  # Placeholder - would come from vector similarity
             chunk_index=chunk.chunk_index
         )

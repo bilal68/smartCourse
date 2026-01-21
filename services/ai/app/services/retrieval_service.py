@@ -68,7 +68,7 @@ class RetrievalService:
         stmt = (
             select(
                 ChunkEmbedding.chunk_id,
-                ContentChunk.chunk_text,
+                ContentChunk.content,  # Use content field instead of chunk_text
                 ContentChunk.asset_id,
                 ChunkEmbedding.embedding.cosine_distance(query_embedding).label('distance')
             )
@@ -85,7 +85,7 @@ class RetrievalService:
         retrieval_results = [
             RetrievalResult(
                 chunk_id=row.chunk_id,
-                text=row.chunk_text,
+                text=row.content,  # Use content field instead of chunk_text
                 asset_id=row.asset_id,
                 score=1.0 - row.distance  # Convert distance to similarity
             )

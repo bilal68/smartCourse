@@ -16,18 +16,20 @@ class ContentChunk(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     course_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    asset_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    asset_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # Made nullable to match DB
     
     # Content data
+    content = Column(Text, nullable=False)  # Changed from chunk_text to content
     chunk_index = Column(Integer, nullable=False)
-    chunk_text = Column(Text, nullable=False)
-    token_count = Column(Integer, nullable=False)
+    start_char = Column(Integer, nullable=True)  # Added to match DB
+    end_char = Column(Integer, nullable=True)    # Added to match DB
+    char_count = Column(Integer, nullable=True)  # Added to match DB
     
-    # Vector embeddings for semantic search
-    embeddings = Column(ARRAY(REAL), nullable=True)  # Store as array of floats
+    # Vector embeddings for semantic search - may need separate migration
+    # embeddings = Column(ARRAY(REAL), nullable=True)  # Store as array of floats
     
-    # Additional metadata
-    extra = Column(JSON, default=dict)
+    # Additional metadata - may need separate migration  
+    # extra = Column(JSON, default=dict)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

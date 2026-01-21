@@ -194,20 +194,22 @@ def seed(db: Session) -> None:
                 description=f"Seeded content for {c.title} / {m.title}.",
             )
 
+            video_id = uuid4()
             video = LearningAsset(
-                id=uuid4(),
+                id=video_id,
                 module_id=m.id,
                 asset_type=AssetType.video,
                 title=f"{m.title} - Video",
-                source_url="https://example.com/demo/video.mp4",
+                source_url=f"courses/{c.id}/modules/{m.id}/assets/{video_id}/content.mp4",
             )
 
+            pdf_id = uuid4()
             pdf = LearningAsset(
-                id=uuid4(),
+                id=pdf_id,
                 module_id=m.id,
                 asset_type=AssetType.pdf,
                 title=f"{m.title} - Notes (PDF)",
-                source_url="https://example.com/demo/notes.pdf",
+                source_url=f"courses/{c.id}/modules/{m.id}/assets/{pdf_id}/content.pdf",
             )
 
             db.add_all([text, video, pdf])
@@ -301,11 +303,12 @@ def seed(db: Session) -> None:
         db.add(cp)
 
         if e.status == EnrollmentStatus.completed:
+            cert_id = uuid4()
             db.add(Certificate(
-                id=uuid4(),
+                id=cert_id,
                 enrollment_id=e.id,
                 serial_no=f"CERT-{uuid4().hex[:10].upper()}",
-                certificate_url="https://example.com/demo/cert.pdf",
+                certificate_url=f"certificates/{e.id}/{cert_id}/certificate.pdf",
                 issued_at=e.completed_at or now,
             ))
 

@@ -3,8 +3,8 @@ import threading
 import time
 
 from app.core.logging import configure_logging, get_logger
-from app.kafka.client import get_kafka_consumer
-from app.kafka.handlers import get_content_handler
+from app.integrations.kafka.client import get_kafka_consumer
+from app.integrations.kafka.handlers import get_content_handler
 from app.api.routes.content import router as content_router
 
 # Configure logging

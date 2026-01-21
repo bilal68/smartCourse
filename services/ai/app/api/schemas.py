@@ -14,10 +14,10 @@ class ContentChunkResponse(BaseModel):
     course_id: UUID
     asset_id: UUID
     chunk_index: int
-    chunk_text: str
-    token_count: int
-    embeddings: Optional[List[float]] = None
-    extra: Dict[str, Any] = {}
+    content: str  # Changed from chunk_text to content
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None  
+    char_count: Optional[int] = None
     created_at: datetime
     
     class Config:
@@ -81,7 +81,7 @@ class SearchResult(BaseModel):
     chunk_id: UUID
     course_id: UUID
     asset_id: UUID
-    chunk_text: str
+    content: str  # Changed from chunk_text to content
     similarity_score: float
     chunk_index: int
 

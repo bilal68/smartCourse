@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.content.processor import ContentProcessor
-from app.kafka.client import get_kafka_producer
+from app.integrations.kafka.client import get_kafka_producer
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
 from app.models.processing_job import ProcessingJob, ProcessingStatus
@@ -107,23 +107,42 @@ class ContentProcessingHandler:
                 # Store content chunks in database
                 self._store_processing_results(db, str(course_id), processing_result)
 
-                # Update processing job with results
-                processing_job.status = ProcessingStatus.COMPLETED
+                # Determine if processing was actually successful
+                successful_assets = processing_result['successful']
+                total_assets = processing_result['total_assets']
+                
+                # Consider processing failed if NO assets were successfully processed
+                if successful_assets == 0:
+                    processing_job.status = ProcessingStatus.FAILED
+                    error_msg = f"All {total_assets} assets failed to process"
+                    processing_job.error_message = error_msg
+                    
+                    status_event = {
+                        "course_id": str(course_id),
+                        "status": "failed",
+                        "processed_assets": 0,
+                        "failed_assets": processing_result['failed'],
+                        "total_chunks": 0,
+                        "error_message": error_msg
+                    }
+                else:
+                    # At least some assets processed successfully
+                    processing_job.status = ProcessingStatus.COMPLETED
+                    
+                    status_event = {
+                        "course_id": str(course_id),
+                        "status": "completed",
+                        "processed_assets": processing_result['successful'],
+                        "failed_assets": processing_result['failed'],
+                        "total_chunks": processing_result['total_chunks'],
+                        "error_message": None
+                    }
+                
                 processing_job.processed_assets = processing_result['successful']
                 processing_job.failed_assets = processing_result['failed']
                 processing_job.total_chunks_created = processing_result['total_chunks']
                 processing_job.completed_at = datetime.utcnow()
                 db.commit()
-
-                # Send real processing results
-                status_event = {
-                    "course_id": str(course_id),
-                    "status": "completed",
-                    "processed_assets": processing_result['successful'],
-                    "failed_assets": processing_result['failed'],
-                    "total_chunks": processing_result['total_chunks'],
-                    "error_message": None
-                }
             except Exception as db_error:
                 logger.error(f"💥 Database error: {str(db_error)}", exc_info=True)
                 # Send error response
@@ -151,11 +170,21 @@ class ContentProcessingHandler:
             #     "error_message": None
             # }
             
-            self.kafka_producer.publish_content_processed(str(course_id), status_event)
-            logger.info(f"✅ Published test completion event for course_id={course_id}")
+            # Publish success or failure event based on status
+            if status_event["status"] == "completed":
+                self.kafka_producer.publish_content_processed(str(course_id), status_event)
+                logger.info(f"✅ Published completion event for course_id={course_id}")
+            else:
+                # Publish failure event using proper function
+                from app.integrations.kafka.producer import publish_course_failure
+                publish_course_failure(str(course_id), status_event["error_message"])
+                logger.info(f"❌ Published failure event for course_id={course_id}")
             
         except Exception as e:
             logger.error(f"💥 Error in handle_course_published: {str(e)}", exc_info=True)
+            # Publish failure event for any unexpected errors
+            from app.integrations.kafka.producer import publish_course_failure  
+            publish_course_failure(str(course_id), str(e))
 
     def _store_processing_results(self, db, course_id: str, results: Dict[str, Any]):
         """
@@ -183,10 +212,12 @@ class ContentProcessingHandler:
                     course_id=course_uuid,
                     asset_id=chunk_data['asset_id'],
                     chunk_index=chunk_data['chunk_index'],
-                    chunk_text=chunk_data['chunk_text'],
-                    token_count=chunk_data['token_count'],
-                    embeddings=chunk_data.get('embeddings'),  # Vector embeddings for search
-                    extra=chunk_data.get('extra', {})
+                    content=chunk_data['chunk_text'],  # Use content field instead of chunk_text
+                    start_char=chunk_data.get('start_char'),
+                    end_char=chunk_data.get('end_char'), 
+                    char_count=chunk_data.get('char_count')
+                    # Note: token_count, embeddings, extra fields removed temporarily
+                    # These need to be added back via migrations
                 )
                 db.add(chunk)
                 total_stored += 1

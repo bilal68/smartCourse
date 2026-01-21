@@ -39,7 +39,7 @@
       "name": "AI Completion Consumer",
       "type": "debugpy",
       "request": "launch",
-      "module": "app.kafka.ai_completion_consumer",
+      "module": "app.integrations.kafka.ai_completion_consumer",
       "cwd": "${workspaceFolder}/services/lms",
       "console": "integratedTerminal",
       "justMyCode": true,
@@ -48,6 +48,22 @@
         "LOG_LEVEL": "DEBUG",
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": "${workspaceFolder}/services/lms",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "AI Course Published Consumer",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.consumers.course_published_consumer",
+      "cwd": "${workspaceFolder}/services/ai",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/services/ai/.env.local",
+      "env": {
+        "LOG_LEVEL": "DEBUG",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/ai",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
@@ -118,6 +134,7 @@
         "Temporal Worker",
         "AI Service",
         "AI Completion Consumer",
+        "AI Course Published Consumer",
         "Celery Worker (OUTBOX Publisher)"
       ],
       "stopAll": true,
@@ -133,6 +150,7 @@
         "Temporal Worker",
         "AI Service",
         "AI Completion Consumer",
+        "AI Course Published Consumer",
         "Celery Worker (OUTBOX Publisher)",
         "LMS Celery Beat"
       ],

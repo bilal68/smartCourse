@@ -8,15 +8,14 @@ then signals the corresponding Temporal workflow.
 
 import json
 import asyncio
+from datetime import datetime
 from typing import Dict, Any
 from uuid import UUID
 
-from kafka import KafkaConsumer
-from kafka.errors import KafkaError
+from confluent_kafka import Consumer, KafkaError, KafkaException
 
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
-from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.modules.courses.models import Course, CourseProcessingStatus
 from app.workflows.temporal_utils import signal_ai_processing_done
 
@@ -35,9 +34,10 @@ def update_course_and_create_outbox(
     error_message: str = None
 ) -> Dict[str, Any]:
     """
-    Update course status and create OUTBOX event in single atomic transaction.
+    Update course processing status only (LMS owns its own data).
     
-    This replaces the old Activity #3 from the workflow - now done by Kafka consumer.
+    Note: No outbox events created here - the AI service already emitted 
+    the completion event via Kafka, so we just update our local state.
     """
     db = SessionLocal()
     try:
@@ -46,55 +46,25 @@ def update_course_and_create_outbox(
             raise Exception(f"Course not found: {course_id}")
         
         if success:
-            # Mark as READY
+            # Mark as READY and clear any previous errors
             course.processing_status = CourseProcessingStatus.ready
-            from datetime import datetime
             course.processed_at = datetime.utcnow()
-            
-            # Create OUTBOX event for course.ready
-            outbox = OutboxEvent(
-                event_type="course.ready",
-                aggregate_type="course",
-                aggregate_id=UUID(course_id),
-                payload={
-                    "course_id": course_id,
-                    "chunks_created": chunks_created,
-                    "ready_at": datetime.utcnow().isoformat()
-                },
-                status=OutboxStatus.pending,
-                attempts=0
-            )
-            db.add(outbox)
-            logger.info(f"✅ Course marked as READY + course.ready OUTBOX created, course_id={course_id}")
+            course.processing_error = None  # Clear any previous error messages
+            logger.info(f"✅ Course marked as READY, course_id={course_id}")
             
         else:
             # Mark as FAILED
             course.processing_status = CourseProcessingStatus.failed
             course.processing_error = error_message or "AI processing failed"
-            
-            # Create OUTBOX event for course.processing_failed
-            outbox = OutboxEvent(
-                event_type="course.processing_failed",
-                aggregate_type="course",
-                aggregate_id=UUID(course_id),
-                payload={
-                    "course_id": course_id,
-                    "error_message": error_message,
-                    "failed_at": datetime.utcnow().isoformat()
-                },
-                status=OutboxStatus.pending,
-                attempts=0
-            )
-            db.add(outbox)
             logger.error(f"❌ Course marked as FAILED, course_id={course_id}, error={error_message}")
         
-        # Commit both changes atomically
+        # Commit status update only
         db.commit()
         
         return {
             "course_id": course_id,
             "success": success,
-            "outbox_id": str(outbox.id)
+            "processing_status": course.processing_status.value
         }
         
     except Exception as e:
@@ -163,30 +133,46 @@ def run_ai_completion_consumer(bootstrap_servers: str = "localhost:9092"):
     """
     consumer = None
     try:
-        consumer = KafkaConsumer(
-            "course.events",
-            bootstrap_servers=[bootstrap_servers],
-            group_id="lms-ai-completion-handler",  # Unique consumer group
-            auto_offset_reset="latest",  # Only process new events
-            enable_auto_commit=True,
-            value_deserializer=lambda m: m  # Raw bytes, we'll decode manually
-        )
+        consumer_config = {
+            'bootstrap.servers': bootstrap_servers,
+            'group.id': 'lms-ai-completion-handler',  # Unique consumer group
+            'auto.offset.reset': 'latest',  # Only process new events
+            'enable.auto.commit': True
+        }
+        
+        consumer = Consumer(consumer_config)
+        consumer.subscribe(["course.events"])
         
         logger.info(f"🎧 AI Completion Consumer started, listening on 'course.events' topic...")
         
-        for message in consumer:
-            try:
-                # Process event in async context
-                asyncio.run(process_ai_completion_event(message.value))
-            except Exception as e:
-                logger.error(f"Error processing message: {str(e)}", exc_info=True)
-                continue
-        
-    except KafkaError as e:
+        try:
+            while True:
+                msg = consumer.poll(1.0)  # Poll for messages with 1 second timeout
+                
+                if msg is None:
+                    continue
+                    
+                if msg.error():
+                    if msg.error().code() == KafkaError._PARTITION_EOF:
+                        # End of partition event - not an error
+                        continue
+                    else:
+                        logger.error(f"Consumer error: {msg.error()}")
+                        break
+                
+                # Process the message
+                try:
+                    asyncio.run(process_ai_completion_event(msg.value()))
+                except Exception as e:
+                    logger.error(f"Error processing message: {str(e)}", exc_info=True)
+                    continue
+                    
+        except KeyboardInterrupt:
+            logger.info("Consumer interrupted by user")
+            
+    except KafkaException as e:
         logger.error(f"Kafka consumer error: {str(e)}")
         raise
-    except KeyboardInterrupt:
-        logger.info("Consumer interrupted by user")
     finally:
         if consumer:
             consumer.close()
@@ -194,7 +180,7 @@ def run_ai_completion_consumer(bootstrap_servers: str = "localhost:9092"):
 
 
 if __name__ == "__main__":
-    # Can be run standalone: python -m app.kafka.ai_completion_consumer
+    # Can be run standalone: python -m app.integrations.kafka.ai_completion_consumer
     import os
     bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     run_ai_completion_consumer(bootstrap_servers)

@@ -3,7 +3,7 @@ import json
 from typing import Any, Dict
 from uuid import uuid4
 
-from kafka import KafkaProducer
+from confluent_kafka import Producer
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -11,17 +11,17 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # Global producer instance
-_producer: KafkaProducer = None
+_producer: Producer = None
 
 
-def get_producer() -> KafkaProducer:
+def get_producer() -> Producer:
     """Get or create Kafka producer."""
     global _producer
     if _producer is None:
-        _producer = KafkaProducer(
-            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
+        config = {
+            'bootstrap.servers': settings.KAFKA_BOOTSTRAP_SERVERS
+        }
+        _producer = Producer(config)
     return _producer
 
 
@@ -51,10 +51,17 @@ def publish_course_completion(
     }
     
     producer = get_producer()
-    future = producer.send(settings.KAFKA_COURSE_TOPIC, key=course_id.encode(), value=event)
-    future.get(timeout=10)  # Block until sent
-    
-    logger.info(f"Published course.processing_completed for course {course_id}")
+    try:
+        producer.produce(
+            topic=settings.KAFKA_COURSE_TOPIC,
+            key=course_id,
+            value=json.dumps(event),
+            callback=lambda err, msg: logger.error(f"Failed to deliver message: {err}") if err else None
+        )
+        producer.flush()  # Ensure message is sent
+        logger.info(f"Published course.processing_completed for course {course_id}")
+    except Exception as e:
+        logger.error(f"Failed to publish course completion: {str(e)}")
 
 
 def publish_course_failure(course_id: str, error_message: str) -> None:
@@ -76,7 +83,14 @@ def publish_course_failure(course_id: str, error_message: str) -> None:
     }
     
     producer = get_producer()
-    future = producer.send(settings.KAFKA_COURSE_TOPIC, key=course_id.encode(), value=event)
-    future.get(timeout=10)
-    
-    logger.error(f"Published course.processing_failed for course {course_id}: {error_message}")
+    try:
+        producer.produce(
+            topic=settings.KAFKA_COURSE_TOPIC,
+            key=course_id,
+            value=json.dumps(event),
+            callback=lambda err, msg: logger.error(f"Failed to deliver message: {err}") if err else None
+        )
+        producer.flush()
+        logger.error(f"Published course.processing_failed for course {course_id}: {error_message}")
+    except Exception as e:
+        logger.error(f"Failed to publish course failure: {str(e)}")

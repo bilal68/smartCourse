@@ -8,7 +8,7 @@ import json
 from typing import Dict, Any, List
 from uuid import UUID
 
-from kafka import KafkaConsumer
+from confluent_kafka import Consumer, KafkaError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -16,7 +16,7 @@ from app.models.content_chunk import ContentChunk
 from app.models.chunk_embedding import ChunkEmbedding
 from app.services.chunking_service import get_chunking_service, TextChunk
 from app.services.embedding_service import get_embedding_service
-from app.kafka.producer import publish_course_completion, publish_course_failure
+from app.integrations.kafka.producer import publish_course_completion, publish_course_failure
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -190,10 +190,10 @@ class CoursePublishedConsumer:
                 course_id=course_id,
                 asset_id=asset_id,
                 chunk_index=chunk.chunk_index,
-                chunk_text=chunk.text,
+                content=chunk.text,  # Use content field instead of chunk_text
                 char_count=chunk.char_count,
-                start_offset=chunk.start_offset,
-                end_offset=chunk.end_offset
+                start_char=chunk.start_offset,  # Map to start_char
+                end_char=chunk.end_offset       # Map to end_char
             )
             db.add(db_chunk)
             db.flush()  # Get ID without committing
@@ -244,27 +244,48 @@ def run_consumer():
         f"group={settings.KAFKA_GROUP_ID}"
     )
     
-    consumer = KafkaConsumer(
-        settings.KAFKA_COURSE_TOPIC,
-        bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-        group_id=settings.KAFKA_GROUP_ID,
-        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        auto_offset_reset='latest',
-        enable_auto_commit=True
-    )
+    # Configure confluent-kafka consumer
+    config = {
+        'bootstrap.servers': settings.KAFKA_BOOTSTRAP_SERVERS,
+        'group.id': settings.KAFKA_GROUP_ID,
+        'auto.offset.reset': 'latest',
+        'enable.auto.commit': True,
+        'session.timeout.ms': 30000,
+        'max.poll.interval.ms': 300000
+    }
+    
+    consumer = Consumer(config)
+    consumer.subscribe([settings.KAFKA_COURSE_TOPIC])
     
     processor = CoursePublishedConsumer()
     
     try:
-        for message in consumer:
-            event = message.value
-            event_type = event.get("event_type")
+        while True:
+            msg = consumer.poll(1.0)
             
-            if event_type == "course.published":
-                logger.info(f"Received course.published event: {event.get('aggregate_id')}")
-                processor.process_event(event)
-            else:
-                logger.debug(f"Ignoring event type: {event_type}")
+            if msg is None:
+                continue
+                
+            if msg.error():
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    logger.debug(f"End of partition reached {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
+                else:
+                    logger.error(f"Kafka error: {msg.error()}")
+                continue
+            
+            try:
+                # Parse message
+                event = json.loads(msg.value().decode('utf-8'))
+                event_type = event.get("event_type")
+                
+                if event_type == "course.published":
+                    logger.info(f"Received course.published event: {event.get('aggregate_id')}")
+                    processor.process_event(event)
+                else:
+                    logger.debug(f"Ignoring event type: {event_type}")
+                    
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
                 
     except KeyboardInterrupt:
         logger.info("Consumer interrupted by user")

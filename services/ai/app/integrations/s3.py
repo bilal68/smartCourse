@@ -135,15 +135,21 @@ class S3Client:
             self.client = DummyS3Client()
             self._is_dummy = True
         else:
-            self.client = boto3.client(
-                's3',
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.AWS_REGION
-            )
+            # Configure for MinIO or AWS S3
+            client_config = {
+                'aws_access_key_id': settings.AWS_ACCESS_KEY_ID,
+                'aws_secret_access_key': settings.AWS_SECRET_ACCESS_KEY,
+                'region_name': settings.AWS_REGION
+            }
+            
+            # Add endpoint URL for MinIO
+            if settings.S3_ENDPOINT_URL:
+                client_config['endpoint_url'] = settings.S3_ENDPOINT_URL
+                
+            self.client = boto3.client('s3', **client_config)
             self._is_dummy = False
         
-        logger.info(f"S3Client initialized, is_dummy={self._is_dummy}")
+        logger.info(f"S3Client initialized, is_dummy={self._is_dummy}, endpoint={getattr(settings, 'S3_ENDPOINT_URL', 'AWS')}")
     
     def upload_file(self, file_path: str, key: str) -> bool:
         """Upload a file to S3."""

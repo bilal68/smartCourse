@@ -5,8 +5,7 @@ import asyncio
 from typing import Dict, Any, Callable
 import uuid
 
-from kafka import KafkaProducer, KafkaConsumer
-from kafka.errors import KafkaError
+from confluent_kafka import Producer, Consumer, KafkaError, KafkaException
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -18,10 +17,10 @@ class AIKafkaProducer:
     """Kafka producer for AI service."""
     
     def __init__(self):
-        self.producer = KafkaProducer(
-            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            value_serializer=lambda x: json.dumps(x).encode('utf-8')
-        )
+        config = {
+            'bootstrap.servers': settings.KAFKA_BOOTSTRAP_SERVERS
+        }
+        self.producer = Producer(config)
         logger.info("AI Kafka producer initialized")
     
     def publish_content_processed(self, course_id: str, processing_result: Dict[str, Any]):
@@ -36,10 +35,15 @@ class AIKafkaProducer:
         }
         
         try:
-            self.producer.send('course.events', event)
+            self.producer.produce(
+                topic=settings.KAFKA_COURSE_TOPIC,
+                key=course_id,
+                value=json.dumps(event),
+                callback=lambda err, msg: logger.error(f"Failed to deliver message: {err}") if err else None
+            )
             self.producer.flush()
             logger.info(f"Published course processing completed event, course_id={course_id}")
-        except KafkaError as e:
+        except Exception as e:
             logger.error(f"Failed to publish course processing completed event, course_id={course_id}, error={str(e)}")
     
     def close(self):
@@ -51,14 +55,14 @@ class AIKafkaConsumer:
     """Kafka consumer for AI service."""
     
     def __init__(self):
-        self.consumer = KafkaConsumer(
-            'course.events',
-            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            group_id=settings.KAFKA_GROUP_ID,
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            auto_offset_reset='earliest',  # Process all messages from beginning
-            enable_auto_commit=True
-        )
+        config = {
+            'bootstrap.servers': settings.KAFKA_BOOTSTRAP_SERVERS,
+            'group.id': settings.KAFKA_GROUP_ID,
+            'auto.offset.reset': 'earliest',  # Process all messages from beginning
+            'enable.auto.commit': True
+        }
+        self.consumer = Consumer(config)
+        self.consumer.subscribe([settings.KAFKA_COURSE_TOPIC])
         self.handlers: Dict[str, Callable] = {}
         logger.info("AI Kafka consumer initialized")
     
@@ -72,9 +76,22 @@ class AIKafkaConsumer:
         """Start consuming messages."""
         logger.info("Starting Kafka consumer for AI service")
         try:
-            for message in self.consumer:
+            while True:
+                msg = self.consumer.poll(1.0)  # Poll with 1 second timeout
+                
+                if msg is None:
+                    continue
+                    
+                if msg.error():
+                    if msg.error().code() == KafkaError._PARTITION_EOF:
+                        # End of partition event - not an error
+                        continue
+                    else:
+                        logger.error(f"Consumer error: {msg.error()}")
+                        break
+                
                 try:
-                    event = message.value
+                    event = json.loads(msg.value().decode('utf-8'))
                     event_type = event.get('event_type')
                     
                     # Handle course.published events (our main interest)
@@ -95,12 +112,15 @@ class AIKafkaConsumer:
                     else:
                         logger.warning(f"🔍 Unknown event type: {event_type}, event_id={event.get('event_id')}")
                         
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode message: {str(e)}")
+                    continue
                 except Exception as e:
                     logger.error(f"Error processing message: {str(e)}", exc_info=True)
                     
         except KeyboardInterrupt:
             logger.info("Consumer interrupted by user")
-        except Exception as e:
+        except KafkaException as e:
             logger.error("Consumer error", error=str(e), exc_info=True)
         finally:
             self.consumer.close()
