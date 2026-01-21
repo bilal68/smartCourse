@@ -13,7 +13,6 @@ services:
       POSTGRES_USER: smartcourse
       POSTGRES_PASSWORD: password
       POSTGRES_DB: smartcourse_lms
-      POSTGRES_MULTIPLE_DATABASES: smartcourse_lms,smartcourse_analytics,smartcourse_ai
     ports:
       - "5432:5432"
     volumes:

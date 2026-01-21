@@ -1,6 +1,6 @@
 -- extra app DBs (
--- CREATE DATABASE smartcourse_analytics;
--- CREATE DATABASE smartcourse_ai;
+CREATE DATABASE smartcourse_analytics;
+CREATE DATABASE smartcourse_ai;
 
 -- Temporal required DBs
 CREATE DATABASE temporal;
