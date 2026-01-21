@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from sqlalchemy import Column, String, Text, Integer, DateTime, JSON
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, REAL
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
@@ -25,15 +26,12 @@ class ContentChunk(Base):
     end_char = Column(Integer, nullable=True)    # Added to match DB
     char_count = Column(Integer, nullable=True)  # Added to match DB
     
-    # Vector embeddings for semantic search - may need separate migration
-    # embeddings = Column(ARRAY(REAL), nullable=True)  # Store as array of floats
-    
-    # Additional metadata - may need separate migration  
-    # extra = Column(JSON, default=dict)
-    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationship to ChunkEmbedding
+    embedding = relationship("ChunkEmbedding", back_populates="chunk", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<ContentChunk(id={self.id}, course_id={self.course_id}, asset_id={self.asset_id}, chunk_index={self.chunk_index})>"
