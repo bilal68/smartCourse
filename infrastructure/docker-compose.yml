@@ -282,6 +282,38 @@ services:
     volumes:
       - ../services/notification:/app
 
+  # ============================================
+  # WORKFLOW ORCHESTRATION (Temporal)
+  # ============================================
+
+  temporal:
+    image: temporalio/auto-setup:1.24.0
+    container_name: smartcourse-temporal
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "7233:7233"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: smartcourse
+      POSTGRES_PWD: password
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+
+  temporal-ui:
+    image: temporalio/ui:2.30.0
+    container_name: smartcourse-temporal-ui
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    ports:
+      - "8082:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+
 volumes:
   smartcourse_pgdata:
   smartcourse_zkdata:
