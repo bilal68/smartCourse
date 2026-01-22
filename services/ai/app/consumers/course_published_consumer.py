@@ -209,74 +209,58 @@ class CoursePublishedConsumer:
         chunk_ids: List[UUID],
         chunks: List[TextChunk]
     ) -> int:
-        """Generate embeddings and store them. Fails gracefully if OpenAI API issues."""
-        # Check if OpenAI API key is valid
-        if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("sk-placeholder"):
-            logger.warning(
-                f"OpenAI API key not configured properly. Creating dummy embeddings for testing. "
-                f"Course {course_id} will use placeholder vectors for semantic search."
-            )
-            return self._create_dummy_embeddings(db, course_id, chunk_ids, chunks)
+        """Generate embeddings and store them using the configured provider."""
+        if not chunk_ids or not chunks or len(chunk_ids) != len(chunks):
+            logger.warning("Mismatch between chunk_ids and chunks")
+            return 0
+            
+        logger.info(f"Creating embeddings using {settings.EMBEDDING_PROVIDER} provider with model: {settings.EMBEDDING_MODEL}")
+        
+        stored_count = 0
+        batch_size = 32  # Process in batches to manage memory
         
         try:
-            # Get chunk texts
-            chunk_texts = [chunk.text for chunk in chunks]
+            # Process chunks in batches
+            for i in range(0, len(chunks), batch_size):
+                batch_chunks = chunks[i:i + batch_size]
+                batch_chunk_ids = chunk_ids[i:i + batch_size]
+                batch_texts = [chunk.text for chunk in batch_chunks]
+                
+                logger.info(f"Processing embedding batch {i//batch_size + 1}: {len(batch_chunks)} chunks")
+                
+                # Generate embeddings using the unified service
+                embeddings = self.embedding_service.encode(batch_texts)
+                
+                if len(embeddings) != len(batch_chunk_ids):
+                    logger.error(f"Embedding count mismatch: {len(embeddings)} != {len(batch_chunk_ids)}")
+                    continue
+                
+                # Prepare bulk insert data
+                embedding_mappings = []
+                for chunk_id, embedding in zip(batch_chunk_ids, embeddings):
+                    embedding_mappings.append({
+                        'id': uuid4(),
+                        'chunk_id': chunk_id,
+                        'course_id': course_id,
+                        'embedding': embedding.tolist(),  # Convert numpy array to list
+                        'model_name': self.embedding_service.get_model_info()['model_name']  # Add missing model_name
+                    })
+                
+                # Bulk insert embeddings for better performance
+                db.bulk_insert_mappings(ChunkEmbedding, embedding_mappings)
+                stored_count += len(embedding_mappings)
+                
+                # Commit batch
+                db.commit()
+                logger.info(f"Stored {len(batch_chunks)} embeddings")
             
-            # Generate embeddings in batch
-            embeddings = self.embedding_service.create_embeddings_batch(chunk_texts)
-            
-            if len(embeddings) != len(chunk_ids):
-                logger.error(
-                    f"Embedding count mismatch: {len(embeddings)} != {len(chunk_ids)}"
-                )
-                return 0
-            
-            # Store embeddings
-            for chunk_id, embedding in zip(chunk_ids, embeddings):
-                db_embedding = ChunkEmbedding(
-                    chunk_id=chunk_id,
-                    course_id=course_id,
-                    embedding=embedding,
-                    model_name=settings.OPENAI_EMBEDDING_MODEL
-                )
-                db.add(db_embedding)
-            
-            logger.info(f"Stored {len(embeddings)} embeddings")
-            return len(embeddings)
+            logger.info(f"Successfully stored {stored_count} embeddings for course {course_id}")
+            return stored_count
             
         except Exception as e:
-            logger.error(f"Failed to generate embeddings for course {course_id}: {e}")
-            logger.warning("Creating dummy embeddings for testing")
-            return self._create_dummy_embeddings(db, course_id, chunk_ids, chunks)
-    
-    def _create_dummy_embeddings(
-        self,
-        db: Session,
-        course_id: UUID,
-        chunk_ids: List[UUID], 
-        chunks: List[TextChunk]
-    ) -> int:
-        """Create dummy embeddings for development/testing."""
-        import random
-        
-        for i, chunk_id in enumerate(chunk_ids):
-            # Create a dummy 1536-dimensional vector with some variation
-            dummy_vector = [random.uniform(-0.1, 0.1) for _ in range(settings.OPENAI_EMBEDDING_DIMENSION)]
-            
-            # Add some content-based variation (simple hash-based)
-            content_hash = hash(chunks[i].text) % 1000
-            dummy_vector[0] = content_hash / 1000.0  # Make similar content have similar first dimension
-            
-            db_embedding = ChunkEmbedding(
-                chunk_id=chunk_id,
-                course_id=course_id,
-                embedding=dummy_vector,
-                model_name="dummy-testing-model"
-            )
-            db.add(db_embedding)
-        
-        logger.info(f"Created {len(chunk_ids)} dummy embeddings for testing")
-        return len(chunk_ids)
+            logger.error(f"Failed to create embeddings: {e}")
+            db.rollback()
+            return 0
 
 
 def run_consumer():

@@ -1,11 +1,14 @@
 """Content and processing API routes for AI service."""
 
+import time
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models.content_chunk import ContentChunk
@@ -18,7 +21,8 @@ from app.api.schemas import (
     ProcessingJobResponse, 
     CourseAnalysisResponse,
     SearchRequest,
-    SearchResponse
+    SearchResponse,
+    SearchResult
 )
 
 router = APIRouter(prefix="/content", tags=["content"])
@@ -104,275 +108,261 @@ async def get_course_analysis(
     return analysis
 
 
+def _fallback_text_search(search_request: SearchRequest, db: Session):
+    """Fallback text search when embeddings are not available."""
+    start_time = time.time()  # Add start_time here
+    logger = get_logger(__name__)
+    
+    query = db.query(ContentChunk)
+    if search_request.course_ids:
+        query = query.filter(ContentChunk.course_id.in_(search_request.course_ids))
+    
+    # Extract keywords from query for better text search
+    import re
+    query_text = search_request.query.lower()
+    # Remove common words and extract meaningful terms
+    keywords = re.findall(r'\b[a-zA-Z]{3,}\b', query_text)
+    keywords = [k for k in keywords if k not in ['what', 'how', 'the', 'and', 'are', 'this', 'that', 'with']]
+    
+    logger.info(f"Text search query: '{search_request.query}' -> Keywords: {keywords}")
+    
+    if not keywords:
+        keywords = [query_text.strip()]
+    
+    # Search for any of the keywords
+    from sqlalchemy import or_
+    search_conditions = []
+    for keyword in keywords:
+        search_conditions.append(ContentChunk.content.ilike(f"%{keyword}%"))
+    
+    if search_conditions:
+        chunks = (
+            query.filter(or_(*search_conditions))
+            .limit(search_request.limit)
+            .all()
+        )
+        logger.info(f"Found {len(chunks)} chunks matching keywords: {keywords}")
+    else:
+        chunks = []
+        logger.warning(f"No search conditions generated for query: {search_request.query}")
+    
+    results = []
+    for chunk in chunks:
+        result = SearchResult(
+            chunk_id=chunk.id,
+            course_id=chunk.course_id,
+            asset_id=chunk.asset_id,
+            content=chunk.content,
+            similarity_score=0.8,  # Placeholder for text search
+            chunk_index=chunk.chunk_index
+        )
+        results.append(result)
+    
+    end_time = time.time()
+    search_time_ms = (end_time - start_time) * 1000
+    
+    return SearchResponse(
+        query=search_request.query,
+        results=results,
+        total_results=len(results),
+        search_time_ms=search_time_ms
+    )
+
+
 @router.post("/search", response_model=SearchResponse)
 async def semantic_search(
     search_request: SearchRequest,
     db: Session = Depends(get_db)
 ):
     """Perform semantic search across content chunks using RAG."""
-    import time
-    import openai
-    from app.core.config import settings
+    from app.services.embedding_service import get_embedding_service
     
     start_time = time.time()
+    logger = get_logger(__name__)
     
-    # Set OpenAI API key
-    openai.api_key = settings.OPENAI_API_KEY
+    # Use unified embedding service for semantic search
+    embedding_service = get_embedding_service()
     
-    if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("sk-placeholder"):
-        # Fallback to text search if no OpenAI key
-        query = db.query(ContentChunk)
+    try:
+        # Generate query embedding using configured provider
+        query_embedding = embedding_service.encode_query(search_request.query)
+        query_vector = query_embedding.tolist()
+        
+        # Build the query with course filter if needed
+        course_filter = ""
         if search_request.course_ids:
-            query = query.filter(ContentChunk.course_id.in_(search_request.course_ids))
+            course_ids_str = "', '".join(str(cid) for cid in search_request.course_ids)
+            course_filter = f"AND cc.course_id IN ('{course_ids_str}')"
         
-        # Extract keywords from query for better text search
-        import re
-        query_text = search_request.query.lower()
-        # Remove common words and extract meaningful terms
-        keywords = re.findall(r'\b[a-zA-Z]{3,}\b', query_text)
-        keywords = [k for k in keywords if k not in ['what', 'how', 'the', 'and', 'are', 'this', 'that', 'with']]
+        # PostgreSQL query using pgvector cosine similarity
+        similarity_query = text(f"""
+            SELECT 
+                cc.id as chunk_id,
+                cc.course_id,
+                cc.asset_id,
+                cc.content,
+                cc.chunk_index,
+                (ce.embedding <=> :query_embedding) as distance,
+                (1 - (ce.embedding <=> :query_embedding)) as similarity
+            FROM content_chunks cc
+            JOIN chunk_embeddings ce ON cc.id = ce.chunk_id
+            WHERE ce.model_name = :model_name
+            {course_filter}
+            AND (1 - (ce.embedding <=> :query_embedding)) >= :threshold
+            ORDER BY ce.embedding <=> :query_embedding
+            LIMIT :limit
+        """)
         
-        # Debug: log the keywords being searched
-        logger = get_logger(__name__)
-        logger.info(f"Search query: '{search_request.query}' -> Keywords: {keywords}")
+        # Execute the similarity search
+        result = db.execute(similarity_query, {
+            "query_embedding": query_vector,
+            "model_name": settings.EMBEDDING_MODEL,
+            "threshold": search_request.similarity_threshold,
+            "limit": search_request.limit
+        })
         
-        if not keywords:
-            keywords = [query_text.strip()]
+        rows = result.fetchall()
+        logger.info(f"Embedding search ({settings.EMBEDDING_PROVIDER}) found {len(rows)} results for query: '{search_request.query}'")
         
-        # Search for any of the keywords
-        search_conditions = []
-        for keyword in keywords:
-            search_conditions.append(ContentChunk.content.ilike(f"%{keyword}%"))
-        
-        if search_conditions:
-            from sqlalchemy import or_
-            chunks = (
-                query.filter(or_(*search_conditions))
-                .limit(search_request.limit)
-                .all()
-            )
-            logger.info(f"Found {len(chunks)} chunks matching keywords: {keywords}")
-        else:
-            chunks = []
-            logger.warning(f"No search conditions generated for query: {search_request.query}")
-        
-        from app.api.schemas import SearchResult
         results = []
-        for chunk in chunks:
-            result = SearchResult(
-                chunk_id=chunk.id,
-                course_id=chunk.course_id,
-                asset_id=chunk.asset_id,
-                content=chunk.content,
-                similarity_score=0.8,  # Placeholder for text search
-                chunk_index=chunk.chunk_index
+        for row in rows:
+            result_obj = SearchResult(
+                chunk_id=row.chunk_id,
+                course_id=row.course_id,
+                asset_id=row.asset_id,
+                content=row.content,
+                similarity_score=float(row.similarity),
+                chunk_index=row.chunk_index
             )
-            results.append(result)
-    else:
-        # Generate query embedding
-        try:
-            query_embedding_response = openai.embeddings.create(
-                input=search_request.query,
-                model=settings.OPENAI_EMBEDDING_MODEL
-            )
-            query_embedding = query_embedding_response.data[0].embedding
-            
-            # Use pgvector for similarity search
-            from sqlalchemy import text
-            
-            # Build the query with course filter if needed
-            course_filter = ""
-            if search_request.course_ids:
-                course_ids_str = "', '".join(str(cid) for cid in search_request.course_ids)
-                course_filter = f"AND ce.course_id IN ('{course_ids_str}')"
-            
-            # PostgreSQL query using pgvector cosine similarity
-            similarity_query = text(f"""
-                SELECT 
-                    cc.id as chunk_id,
-                    cc.course_id,
-                    cc.asset_id,
-                    cc.content,
-                    cc.chunk_index,
-                    (ce.embedding <=> :query_embedding) as distance,
-                    (1 - (ce.embedding <=> :query_embedding)) as similarity
-                FROM content_chunks cc
-                JOIN chunk_embeddings ce ON cc.id = ce.chunk_id
-                WHERE (1 - (ce.embedding <=> :query_embedding)) >= :threshold
-                {course_filter}
-                ORDER BY ce.embedding <=> :query_embedding
-                LIMIT :limit
-            """)
-            
-            # Execute the query
-            result_rows = db.execute(
-                similarity_query,
-                {
-                    "query_embedding": query_embedding,  # Pass as list, not string
-                    "threshold": search_request.similarity_threshold,
-                    "limit": search_request.limit
-                }
-            ).fetchall()
-            
-            # Convert to SearchResult objects
-            from app.api.schemas import SearchResult
-            results = []
-            for row in result_rows:
-                result = SearchResult(
-                    chunk_id=row.chunk_id,
-                    course_id=row.course_id,
-                    asset_id=row.asset_id,
-                    content=row.content,
-                    similarity_score=float(row.similarity),
-                    chunk_index=row.chunk_index
-                )
-                results.append(result)
-            
-        except Exception as e:
-            # Fallback to text search on error
-            logger = get_logger(__name__)
-            logger.error(f"Vector search error: {e}")
-            
-            query = db.query(ContentChunk)
-            if search_request.course_ids:
-                query = query.filter(ContentChunk.course_id.in_(search_request.course_ids))
-            
-            chunks = (
-                query.filter(ContentChunk.content.ilike(f"%{search_request.query}%"))
-                .limit(search_request.limit)
-                .all()
-            )
-            
-            from app.api.schemas import SearchResult
-            results = []
-            for chunk in chunks:
-                result = SearchResult(
-                    chunk_id=chunk.id,
-                    course_id=chunk.course_id,
-                    asset_id=chunk.asset_id,
-                    content=chunk.content,
-                    similarity_score=0.8,  # Fallback score
-                    chunk_index=chunk.chunk_index
-                )
-                results.append(result)
+            results.append(result_obj)
+                
+    except Exception as e:
+        logger.error(f"Embedding search failed: {e}")
+        logger.info("Falling back to text search")
+        # Fall back to text search
+        return _fallback_text_search(search_request, db)
     
-    search_time = (time.time() - start_time) * 1000
+    # Return results
+    end_time = time.time()
+    search_time_ms = (end_time - start_time) * 1000
     
     return SearchResponse(
         query=search_request.query,
         results=results,
         total_results=len(results),
-        search_time_ms=search_time
+        search_time_ms=search_time_ms
     )
 
 
 @router.post("/generate-embeddings")
 async def generate_embeddings(
     course_id: Optional[UUID] = None,
+    force_regenerate: bool = Query(default=True, description="Regenerate embeddings even if they exist"),
     db: Session = Depends(get_db)
 ):
-    """Generate embeddings for content chunks that don't have them yet."""
-    import openai
-    from app.core.config import settings
-    
-    # Check if we should use dummy embeddings for testing
-    use_dummy = not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("sk-placeholder")
-    
-    if not use_dummy:
-        openai.api_key = settings.OPENAI_API_KEY
-    
-    # Get chunks without embeddings (left join to check for missing embeddings)
-    from sqlalchemy.orm import joinedload
-    from sqlalchemy import and_, or_
-    
-    chunks_query = (
-        db.query(ContentChunk)
-        .outerjoin(ChunkEmbedding, ContentChunk.id == ChunkEmbedding.chunk_id)
-        .filter(ChunkEmbedding.id.is_(None))  # No embedding exists
-    )
-    
-    if course_id:
-        chunks_query = chunks_query.filter(ContentChunk.course_id == course_id)
-    
-    chunks_without_embeddings = chunks_query.all()
-    
-    if not chunks_without_embeddings:
-        return {"message": "All chunks already have embeddings", "updated": 0}
+    """Generate embeddings for content chunks using the configured provider."""
+    from app.services.embedding_service import get_embedding_service
     
     logger = get_logger(__name__)
+    
+    if force_regenerate:
+        # Get ALL chunks for the course (ignore existing embeddings)
+        chunks_query = db.query(ContentChunk)
+        if course_id:
+            chunks_query = chunks_query.filter(ContentChunk.course_id == course_id)
+        chunks_to_process = chunks_query.all()
+        
+        # Delete existing embeddings
+        if chunks_to_process:
+            chunk_ids = [chunk.id for chunk in chunks_to_process]
+            delete_query = db.query(ChunkEmbedding).filter(ChunkEmbedding.chunk_id.in_(chunk_ids))
+            deleted_count = delete_query.count()
+            delete_query.delete(synchronize_session=False)
+            db.commit()
+            logger.info(f"Deleted {deleted_count} existing embeddings")
+    else:
+        # Get chunks without embeddings only
+        chunks_query = (
+            db.query(ContentChunk)
+            .outerjoin(ChunkEmbedding, ContentChunk.id == ChunkEmbedding.chunk_id)
+            .filter(ChunkEmbedding.id.is_(None))  # No embedding exists
+        )
+        if course_id:
+            chunks_query = chunks_query.filter(ContentChunk.course_id == course_id)
+        chunks_to_process = chunks_query.all()
+    
+    if not chunks_to_process:
+        return {"message": "No chunks to process", "updated": 0}
+    
+    logger.info(f"Processing {len(chunks_to_process)} chunks (force_regenerate={force_regenerate})")
+    
+    # Initialize embedding service
+    try:
+        embedding_service = get_embedding_service()
+        model_info = embedding_service.get_model_info()
+        logger.info(f"Using {model_info['provider']} embeddings with model: {model_info['model_name']}")
+    except Exception as e:
+        logger.error(f"Failed to initialize sentence-transformers: {e}")
+        
+        # Check for common Windows PyTorch dependency issue
+        if "c10.dll" in str(e) or "WinError 126" in str(e):
+            detail = (
+                "PyTorch dependency missing. Please install Microsoft Visual C++ Redistributable:\n"
+                "1. Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe\n"
+                "2. Install and restart your terminal\n"
+                "3. Try again"
+            )
+        else:
+            detail = f"Sentence-transformers initialization error: {str(e)}"
+        
+        raise HTTPException(status_code=500, detail=detail)
+    
     updated_count = 0
-    batch_size = settings.EMBEDDING_BATCH_SIZE
+    batch_size = 32
     
-    if use_dummy:
-        # Create dummy embeddings for testing
-        import random
-        logger.warning("Creating dummy embeddings for testing - not real semantic vectors!")
-        
-        for chunk in chunks_without_embeddings:
-            # Create a dummy 1536-dimensional vector with content-based variation
-            dummy_vector = [random.uniform(-0.1, 0.1) for _ in range(settings.OPENAI_EMBEDDING_DIMENSION)]
+    try:
+        # Process chunks in batches to manage memory
+        for i in range(0, len(chunks_to_process), batch_size):
+            batch = chunks_to_process[i:i + batch_size]
+            batch_texts = [chunk.content for chunk in batch]
             
-            # Add some content-based variation (simple hash-based)
-            content_hash = hash(chunk.content) % 1000
-            dummy_vector[0] = content_hash / 1000.0
+            logger.info(f"Processing batch {i//batch_size + 1}: {len(batch)} chunks")
             
-            chunk_embedding = ChunkEmbedding(
-                chunk_id=chunk.id,
-                course_id=chunk.course_id,
-                embedding=dummy_vector,
-                model_name="dummy-testing-model"
-            )
-            db.add(chunk_embedding)
-            updated_count += 1
-        
-        db.commit()
-        return {
-            "message": f"Created {updated_count} DUMMY embeddings for testing (NOT real semantic vectors)",
-            "updated": updated_count,
-            "total_chunks": len(chunks_without_embeddings),
-            "warning": "These are random vectors for testing RAG architecture only"
-        }
-    
-    # Process in batches with real OpenAI embeddings
-    for i in range(0, len(chunks_without_embeddings), batch_size):
-        batch = chunks_without_embeddings[i:i + batch_size]
-        texts = [chunk.content for chunk in batch]
-        
-        try:
-            # Generate embeddings for batch
-            response = openai.embeddings.create(
-                input=texts,
-                model=settings.OPENAI_EMBEDDING_MODEL
-            )
+            # Generate embeddings for the batch
+            embeddings = embedding_service.encode(batch_texts)
             
-            # Create ChunkEmbedding records
-            for j, chunk in enumerate(batch):
-                embedding_vector = response.data[j].embedding
-                
-                # Create ChunkEmbedding record
-                chunk_embedding = ChunkEmbedding(
-                    chunk_id=chunk.id,
-                    course_id=chunk.course_id,
-                    embedding=embedding_vector,
-                    model_name=settings.OPENAI_EMBEDDING_MODEL
-                )
-                db.add(chunk_embedding)
-                updated_count += 1
+            # Prepare bulk insert data
+            embedding_mappings = []
+            for chunk, embedding in zip(batch, embeddings):
+                embedding_mappings.append({
+                    'id': uuid4(),
+                    'chunk_id': chunk.id,
+                    'course_id': chunk.course_id,
+                    'embedding': embedding.tolist(),  # Convert numpy array to list
+                    'model_name': model_info['model_name']  # Add missing model_name
+                })
+            
+            # Bulk insert embeddings for better performance
+            db.bulk_insert_mappings(ChunkEmbedding, embedding_mappings)
+            updated_count += len(embedding_mappings)
             
             # Commit batch
             db.commit()
-            logger.info(f"Generated embeddings for batch {i//batch_size + 1}, updated {len(batch)} chunks")
-            
-        except Exception as e:
-            logger.error(f"Failed to generate embeddings for batch {i//batch_size + 1}: {e}")
-            db.rollback()
-            continue
-    
-    return {
-        "message": f"Generated {updated_count} REAL semantic embeddings",
-        "updated": updated_count,
-        "total_chunks": len(chunks_without_embeddings)
-    }
+            logger.info(f"Stored {len(batch)} embeddings")
+        
+        return {
+            "message": f"Generated {updated_count} embeddings using {model_info['provider']}",
+            "updated": updated_count,
+            "total_chunks": len(chunks_to_process),
+            "provider": model_info['provider'],
+            "model": model_info['model_name'],
+            "force_regenerate": force_regenerate
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate embeddings: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to generate embeddings: {str(e)}")
 
 
 @router.get("/courses/{course_id}/stats")

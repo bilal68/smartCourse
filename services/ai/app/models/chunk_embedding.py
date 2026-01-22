@@ -27,8 +27,10 @@ class ChunkEmbedding(Base):
     )
     course_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
     
-    # Vector embedding - dimension 1536 for OpenAI text-embedding-3-small
-    embedding: Mapped[Vector] = mapped_column(Vector(1536), nullable=False)
+    # Vector embedding - flexible dimension based on model
+    # 384 for sentence-transformers (multi-qa-MiniLM-L6-cos-v1)
+    # 1536 for OpenAI (text-embedding-3-small)
+    embedding: Mapped[Vector] = mapped_column(Vector(None), nullable=False)
     
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

@@ -37,13 +37,20 @@ class Settings(BaseSettings):
     KAFKA_COURSE_TOPIC: str = "course.events"
     KAFKA_AI_TOPIC: str = "ai"
     
-    # OpenAI Configuration for RAG
+    # Unified Embedding Configuration
+    EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "sentence-transformers")  # "openai" or "sentence-transformers"
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "multi-qa-MiniLM-L6-cos-v1")
+    EMBEDDING_DIMENSION: int = int(os.getenv("EMBEDDING_DIMENSION", "384"))
+    EMBEDDING_DEVICE: str = os.getenv("EMBEDDING_DEVICE", "cpu")  # For local models
+    
+    # OpenAI Configuration (when using OpenAI embeddings)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
-    OPENAI_EMBEDDING_DIMENSION: int = 1536
-    OPENAI_CHAT_MODEL: str = "gpt-3.5-turbo"
-    OPENAI_TEMPERATURE: float = 0.7
-    OPENAI_MAX_TOKENS: int = 500
+    
+    # LLM Configuration
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")  # "openai", "groq", "ollama"
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
+    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "500"))
     
     # Content Chunking Configuration
     CHUNK_SIZE: int = 1000  # Characters per chunk
