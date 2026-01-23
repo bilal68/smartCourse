@@ -70,15 +70,5 @@ async def root():
     return {
         "service": "SmartCourse AI Service",
         "version": "1.0.0",
-        "status": "🚀 Running with Content Processing"
-    }
-
-# Content processing endpoints
-@app.get("/api/v1/processing/status")
-async def processing_status():
-    """Get processing service status."""
-    return {
-        "service": "content-processing",
-        "status": "active",
-        "capabilities": ["content_chunking", "text_analysis"]
+        "status": "🚀 Running with Streaming RAG"
     }
