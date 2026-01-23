@@ -1,11 +1,11 @@
-"""Content module models."""
+"""Content models for AI service - RAG and embeddings."""
 
 import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, Optional
 from sqlalchemy import Column, String, Text, Integer, DateTime, JSON, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY, REAL
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, REAL
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -25,9 +25,9 @@ class ContentChunk(Base):
     
     __tablename__ = "content_chunks"
     
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    course_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
-    asset_id = Column(PG_UUID(as_uuid=True), nullable=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    asset_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     
     # Content data
     content = Column(Text, nullable=False)
@@ -35,7 +35,7 @@ class ContentChunk(Base):
     start_char = Column(Integer, nullable=True)
     end_char = Column(Integer, nullable=True)
     char_count = Column(Integer, nullable=True)
-    token_count = Column(Integer, nullable=True)  # Add token count for stats
+    # token_count = Column(Integer, nullable=True)  # TODO: Add via migration
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -55,110 +55,95 @@ class ChunkEmbedding(Base):
     """
     __tablename__ = "chunk_embeddings"
 
-    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     chunk_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), 
+        UUID(as_uuid=True), 
         ForeignKey("content_chunks.id", ondelete="CASCADE"),
-        unique=True,
         nullable=False,
+        unique=True,  # One embedding per chunk
         index=True
     )
-    course_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    course_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     
-    # Vector embedding - flexible dimension based on model
-    embedding: Mapped[Vector] = mapped_column(Vector(), nullable=False)
-    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Vector embedding - match actual database column name
+    embedding: Mapped[list[float]] = mapped_column(Vector(384), nullable=False)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
-    )
-
+    # Metadata for the embedding
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="multi-qa-MiniLM-L6-cos-v1")
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
     # Relationships
-    chunk: Mapped["ContentChunk"] = relationship("ContentChunk", back_populates="embedding")
-
-    __table_args__ = (
-        Index('ix_chunk_embeddings_course_id', 'course_id'),
-        Index('ix_chunk_embeddings_model_name', 'model_name'),
-    )
+    chunk = relationship("ContentChunk", back_populates="embedding")
+    
+    def __repr__(self):
+        return f"<ChunkEmbedding(id={self.id}, chunk_id={self.chunk_id}, model={self.model_name})>"
 
 
 class ProcessingJob(Base):
-    """Model for tracking content processing jobs."""
-    
+    """Track content processing jobs for courses."""
     __tablename__ = "processing_jobs"
     
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    course_id = Column(PG_UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     
-    # Processing details
-    status = Column(String, nullable=False, default=ProcessingStatus.PENDING)
-    total_assets = Column(Integer, default=0)
-    processed_assets = Column(Integer, default=0)
-    failed_assets = Column(Integer, default=0)
-    total_chunks_created = Column(Integer, default=0)
+    # Job details
+    status: Mapped[ProcessingStatus] = mapped_column(String(20), nullable=False, default=ProcessingStatus.PENDING)
+    total_chunks: Mapped[int] = mapped_column(Integer, nullable=True)  # Set when processing starts
+    processed_chunks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     
-    # Error handling
-    error_message = Column(Text, nullable=True)
-    failed_asset_details = Column(JSON, default=list)
-    
-    # Processing metadata
-    processing_metadata = Column(JSON, default=dict)
+    # Error tracking
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
-    @property
-    def success_rate(self) -> float:
-        """Calculate success rate of processing."""
-        if self.total_assets == 0:
-            return 0.0
-        return (self.processed_assets - self.failed_assets) / self.total_assets
-    
-    @property
-    def is_completed(self) -> bool:
-        """Check if processing is completed."""
-        return self.status in [ProcessingStatus.COMPLETED, ProcessingStatus.FAILED]
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     def __repr__(self):
         return f"<ProcessingJob(id={self.id}, course_id={self.course_id}, status={self.status})>"
+    
+    @property
+    def progress_percentage(self) -> float:
+        """Calculate processing progress as percentage."""
+        if not self.total_chunks or self.total_chunks == 0:
+            return 0.0
+        return (self.processed_chunks / self.total_chunks) * 100
 
 
 class CourseAnalysis(Base):
-    """Model for storing AI-generated course analysis."""
-    
+    """Store analysis results and metadata for processed courses."""
     __tablename__ = "course_analysis"
     
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    course_id = Column(PG_UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
     
-    # Analysis content
-    summary = Column(Text, nullable=True)
-    key_topics = Column(JSON, default=list)  # List of strings
-    difficulty_score = Column(REAL, nullable=True)  # 0.0 - 1.0
-    estimated_duration = Column(String(50), nullable=True)  # e.g., "2-3 hours"
+    # Analysis results
+    total_chunks: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_characters: Mapped[int] = mapped_column(Integer, nullable=False)
+    avg_chunk_size: Mapped[float] = mapped_column(REAL, nullable=False)
     
-    # Structured insights
-    content_insights = Column(JSON, default=dict)
-    learning_objectives = Column(JSON, default=list)
-    prerequisites = Column(JSON, default=list)
+    # Content metadata extracted during processing
+    course_title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    course_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    key_topics: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), nullable=True)
     
-    # Quality metrics
-    content_quality_score = Column(REAL, nullable=True)  # 0.0 - 1.0
-    engagement_score = Column(REAL, nullable=True)  # 0.0 - 1.0
-    confidence_score = Column(REAL, nullable=True)  # AI confidence in analysis
-    
-    # Metadata
-    analysis_version = Column(String(20), nullable=False, default="1.0")
+    # Search optimization
+    is_searchable: Mapped[bool] = mapped_column(nullable=False, default=True)
+    last_indexed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     def __repr__(self):
-        return f"<CourseAnalysis(id={self.id}, course_id={self.course_id}, version={self.analysis_version})>"
+        return f"<CourseAnalysis(id={self.id}, course_id={self.course_id}, chunks={self.total_chunks})>"
+
+
+# Create database indexes for better query performance
+Index('idx_chunk_embeddings_vector', ChunkEmbedding.embedding, postgresql_using='ivfflat')
+Index('idx_content_chunks_course_created', ContentChunk.course_id, ContentChunk.created_at)
+Index('idx_processing_jobs_status', ProcessingJob.status, ProcessingJob.created_at)

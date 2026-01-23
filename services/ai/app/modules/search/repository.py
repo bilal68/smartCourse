@@ -39,8 +39,10 @@ class SearchRepository:
         }
 
         if course_ids:
-            params["course_ids"] = course_ids
-            course_filter_sql = " AND cc.course_id = ANY(:course_ids)"
+            # Convert course_ids to UUID array for PostgreSQL
+            uuid_list = [str(cid) for cid in course_ids] 
+            params["course_ids"] = uuid_list
+            course_filter_sql = " AND cc.course_id::text = ANY(:course_ids)"
             logger.info(f"Filtering by course IDs: {params['course_ids']}")
         else:
             logger.info("No course filter applied - searching all courses")

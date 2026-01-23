@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
     # LLM Configuration
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")  # "openai", "groq", "ollama"
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "ollama")  # "openai", "groq", "ollama"
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.1")  # Default to Llama 3.1 for Ollama
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "500"))
     
