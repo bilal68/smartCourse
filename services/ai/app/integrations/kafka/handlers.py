@@ -4,13 +4,11 @@ from typing import Dict, Any
 from datetime import datetime
 from uuid import UUID
 
-from app.content.processor import ContentProcessor
+from app.modules.content.processor import ContentProcessor
 from app.integrations.kafka.client import get_kafka_producer
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
-from app.models.processing_job import ProcessingJob, ProcessingStatus
-from app.models.content_chunk import ContentChunk
-from app.models.course_analysis import CourseAnalysis
+from app.modules.content.models import ProcessingJob, ProcessingStatus, ContentChunk, CourseAnalysis
 
 logger = get_logger(__name__)
 
@@ -67,7 +65,7 @@ class ContentProcessingHandler:
             # ===== DATABASE PROCESSING =====
             from app.models.processing_job import ProcessingJob, ProcessingStatus
             from app.models.content_chunk import ContentChunk
-            from app.content.processor import ContentProcessor
+            from app.modules.content.processor import ContentProcessor
             from datetime import datetime
             from sqlalchemy import text
             

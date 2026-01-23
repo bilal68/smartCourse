@@ -6,14 +6,13 @@ then publishes completion/failure event.
 """
 import json
 from typing import Dict, Any, List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from confluent_kafka import Consumer, KafkaError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models.content_chunk import ContentChunk
-from app.models.chunk_embedding import ChunkEmbedding
+from app.modules.content.models import ContentChunk, ChunkEmbedding
 from app.services.chunking_service import get_chunking_service, TextChunk
 from app.services.embedding_service import get_embedding_service
 from app.integrations.kafka.producer import publish_course_completion, publish_course_failure

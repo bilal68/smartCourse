@@ -5,8 +5,7 @@ from uuid import UUID
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
 
-from app.models.chunk_embedding import ChunkEmbedding
-from app.models.content_chunk import ContentChunk
+from app.modules.content.models import ChunkEmbedding, ContentChunk
 from app.services.embedding_service import get_embedding_service
 from app.core.logging import get_logger
 

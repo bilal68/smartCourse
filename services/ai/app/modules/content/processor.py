@@ -1,4 +1,4 @@
-"""Move ContentProcessor from LMS to AI service for better separation of concerns."""
+"""Content processing functionality."""
 
 import re
 import uuid

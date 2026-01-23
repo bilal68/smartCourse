@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from uuid import UUID
 
-from app.models.processing_job import ProcessingStatus
+from app.modules.content.models import ProcessingStatus
 
 
 class ContentChunkResponse(BaseModel):

@@ -5,7 +5,8 @@ import time
 from app.core.logging import configure_logging, get_logger
 from app.integrations.kafka.client import get_kafka_consumer
 from app.integrations.kafka.handlers import get_content_handler
-from app.api.routes.content import router as content_router
+from app.modules.content.routes import router as content_router
+from app.modules.search.routes import router as search_router
 
 # Configure logging
 configure_logging()
@@ -19,6 +20,7 @@ app = FastAPI(
 
 # Include API routes
 app.include_router(content_router, prefix="/api/v1")
+app.include_router(search_router, prefix="/api/v1")
 
 
 def start_kafka_consumer():

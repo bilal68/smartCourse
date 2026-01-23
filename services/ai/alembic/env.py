@@ -14,9 +14,8 @@ from app.db.base import Base
 from app.core.config import settings
 
 # Import all models to ensure they are registered
-from app.models.content_chunk import ContentChunk
-from app.models.processing_job import ProcessingJob
-from app.models.course_analysis import CourseAnalysis
+# Import models for Alembic auto-generation
+from app.modules.content.models import ContentChunk, ProcessingJob, CourseAnalysis
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
