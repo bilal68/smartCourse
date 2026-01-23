@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import threading
 import time
 
@@ -17,6 +18,15 @@ app = FastAPI(
     title="SmartCourse AI Service",
     description="AI-powered features for course content processing and recommendations",
     version="1.0.0"
+)
+
+# Add CORS middleware to allow browser requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for testing
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Include API routes

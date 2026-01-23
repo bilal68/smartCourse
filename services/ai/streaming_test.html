@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Streaming Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .question-box { margin: 20px 0; }
+        .question-box input { width: 70%; padding: 10px; }
+        .question-box button { padding: 10px 20px; margin-left: 10px; }
+        .response-box { 
+            border: 1px solid #ccc; 
+            padding: 20px; 
+            min-height: 200px; 
+            background: #f9f9f9;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .status { margin: 10px 0; color: #666; }
+        .chunk { color: #007acc; }
+        .start-info { color: #28a745; margin-bottom: 15px; }
+        .sources { color: #6c757d; font-size: 12px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 RAG Streaming Test</h1>
+        <p>Test your streaming RAG endpoint in real-time!</p>
+        
+        <div class="question-box">
+            <input type="text" id="questionInput" placeholder="Ask a question about your course content..." value="What is machine learning?">
+            <button onclick="askQuestion()">Ask Stream</button>
+            <button onclick="clearResponse()">Clear</button>
+        </div>
+        
+        <div class="status" id="status">Ready to test streaming...</div>
+        
+        <div class="response-box" id="responseBox">
+            Streaming response will appear here chunk by chunk...
+        </div>
+    </div>
+
+    <script>
+        let currentResponse = '';
+
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value;
+            const statusDiv = document.getElementById('status');
+            const responseBox = document.getElementById('responseBox');
+            
+            if (!question.trim()) {
+                alert('Please enter a question!');
+                return;
+            }
+
+            // Clear previous response
+            currentResponse = '';
+            responseBox.innerHTML = '';
+            statusDiv.innerHTML = '🔄 Starting stream...';
+
+            try {
+                const response = await fetch('http://127.0.0.1:8001/api/v1/rag/ask/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        mode: 'student',
+                        provider: 'groq'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                statusDiv.innerHTML = '⚡ Streaming in real-time...';
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let isFirstChunk = true;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        statusDiv.innerHTML = '✅ Stream completed!';
+                        break;
+                    }
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            
+                            if (data.trim() === '') continue;
+                            
+                            try {
+                                const parsed = JSON.parse(data);
+                                
+                                if (parsed.type === 'start') {
+                                    responseBox.innerHTML += `<div class="start-info">📍 Question: ${parsed.question}<br>🎯 Mode: ${parsed.mode}<br>🤖 Provider: ${parsed.model_info.provider} (${parsed.model_info.model})<br>📊 Sources found: ${parsed.sources.length}<br>📈 Confidence: ${parsed.confidence}<br><br>🔥 Streaming response:</div>`;
+                                    
+                                    // Create streaming text container
+                                    const streamDiv = document.createElement('div');
+                                    streamDiv.id = 'streamText';
+                                    streamDiv.className = 'chunk';
+                                    streamDiv.style.marginTop = '10px';
+                                    responseBox.appendChild(streamDiv);
+                                    
+                                } else if (parsed.type === 'error') {
+                                    responseBox.innerHTML += `<div style="color: red;">❌ Error: ${parsed.error}</div>`;
+                                } else if (parsed.type === 'complete') {
+                                    responseBox.innerHTML += `<div style="color: green;"><br><br>✅ Complete: ${parsed.answer}</div>`;
+                                } else if (typeof parsed === 'string') {
+                                    // This is a streaming text chunk
+                                    currentResponse += parsed;
+                                    const streamDiv = document.getElementById('streamText');
+                                    if (streamDiv) {
+                                        streamDiv.textContent = currentResponse;
+                                        responseBox.scrollTop = responseBox.scrollHeight;
+                                    }
+                                }
+                            } catch (e) {
+                                // Handle raw streaming text that might not be JSON
+                                const streamDiv = document.getElementById('streamText');
+                                if (streamDiv && data.trim()) {
+                                    // Try to parse as JSON string first
+                                    try {
+                                        const text = JSON.parse(data);
+                                        currentResponse += text;
+                                    } catch (e2) {
+                                        // If not JSON, use as-is
+                                        currentResponse += data;
+                                    }
+                                    streamDiv.textContent = currentResponse;
+                                    responseBox.scrollTop = responseBox.scrollHeight;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                responseBox.innerHTML = `Error: ${error.message}`;
+            }
+        }
+
+        function clearResponse() {
+            document.getElementById('responseBox').innerHTML = 'Streaming response will appear here chunk by chunk...';
+            document.getElementById('status').innerHTML = 'Ready to test streaming...';
+            currentResponse = '';
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('questionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                askQuestion();
+            }
+        });
+    </script>
+</body>
+</html>

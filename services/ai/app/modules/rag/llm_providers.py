@@ -33,6 +33,11 @@ class LLMProvider(ABC):
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the model."""
         pass
+    
+    @abstractmethod
+    def process_question_stream(self, question: str, retrieved_chunks: List[str], mode: str = "student"):
+        """Process a question through the provider with streaming response."""
+        pass
 
 
 class GroqProvider(LLMProvider):
@@ -127,6 +132,50 @@ Please provide a clear, helpful answer based on the content above. If the conten
             "model": self.model_name,
             "type": "cloud_api"
         }
+    
+    def process_question_stream(self, question: str, retrieved_chunks: List[str], mode: str = "student"):
+        """Process question using Groq with streaming response."""
+        try:
+            import groq
+            
+            client = groq.Groq(api_key=self.api_key)
+            context = self._prepare_context(retrieved_chunks)
+            
+            if mode == "instructor":
+                system_prompt = """You are an expert instructional designer and teacher. Based on the provided course content, help instructors create better learning materials, summaries, objectives, and assessments."""
+                user_prompt = f"""Course Content:
+{context}
+
+Instructor Question: {question}
+
+Please provide helpful suggestions for instructional design, learning objectives, or content enhancement based on the content above."""
+            else:
+                system_prompt = """You are a helpful learning assistant for students. Answer questions based only on the provided course content. Be clear, educational, and encouraging."""
+                user_prompt = f"""Course Content:
+{context}
+
+Student Question: {question}
+
+Please provide a clear, helpful answer based on the content above."""
+            
+            # Make streaming API call
+            stream = client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1024,
+                stream=True
+            )
+            
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+                    
+        except Exception as e:
+            yield f"Error: {str(e)}"
 
 
 class OpenAIProvider(LLMProvider):
@@ -220,6 +269,49 @@ Please provide a clear, helpful answer based on the content above."""
             "model": self.model_name,
             "type": "cloud_api"
         }
+    
+    def process_question_stream(self, question: str, retrieved_chunks: List[str], mode: str = "student"):
+        """Process question using OpenAI with streaming response."""
+        try:
+            from openai import OpenAI
+            
+            client = OpenAI(api_key=self.api_key)
+            context = self._prepare_context(retrieved_chunks)
+            
+            if mode == "instructor":
+                system_prompt = """You are an expert instructional designer and teacher. Based on the provided course content, help instructors create better learning materials, summaries, objectives, and assessments."""
+                user_prompt = f"""Course Content:
+{context}
+
+Instructor Question: {question}
+
+Please provide helpful suggestions for instructional design, learning objectives, or content enhancement."""
+            else:
+                system_prompt = """You are a helpful learning assistant for students. Answer questions based only on the provided course content. Be clear, educational, and encouraging."""
+                user_prompt = f"""Course Content:
+{context}
+
+Student Question: {question}
+
+Please provide a clear, helpful answer based on the content above."""
+            
+            stream = client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1024,
+                stream=True
+            )
+            
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+                    
+        except Exception as e:
+            yield f"Error: {str(e)}"
 
 
 class AnthropicProvider(LLMProvider):
@@ -311,6 +403,44 @@ Please provide a clear, helpful answer based on the content above."""
             "model": self.model_name,
             "type": "cloud_api"
         }
+    
+    def process_question_stream(self, question: str, retrieved_chunks: List[str], mode: str = "student"):
+        """Process question using Anthropic Claude with streaming response."""
+        try:
+            import anthropic
+            
+            client = anthropic.Anthropic(api_key=self.api_key)
+            context = self._prepare_context(retrieved_chunks)
+            
+            if mode == "instructor":
+                system_prompt = """You are an expert instructional designer and teacher. Based on the provided course content, help instructors create better learning materials, summaries, objectives, and assessments."""
+                user_prompt = f"""Course Content:
+{context}
+
+Instructor Question: {question}
+
+Please provide helpful suggestions for instructional design, learning objectives, or content enhancement."""
+            else:
+                system_prompt = """You are a helpful learning assistant for students. Answer questions based only on the provided course content. Be clear, educational, and encouraging."""
+                user_prompt = f"""Course Content:
+{context}
+
+Student Question: {question}
+
+Please provide a clear, helpful answer based on the content above."""
+            
+            with client.messages.stream(
+                model=self.model_name,
+                max_tokens=1024,
+                temperature=0.7,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}]
+            ) as stream:
+                for text in stream.text_stream:
+                    yield text
+                    
+        except Exception as e:
+            yield f"Error: {str(e)}"
 
 
 def get_llm_provider(provider_name: str = "groq", **kwargs) -> LLMProvider:

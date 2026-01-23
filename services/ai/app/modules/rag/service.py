@@ -144,6 +144,129 @@ class RAGService:
                 "error": str(e)
             }
     
+    def ask_question_stream(
+        self,
+        question: str,
+        course_ids: Optional[List[str]] = None,
+        mode: str = "student",
+        provider: str = "groq",
+        model_name: Optional[str] = None,
+        limit: int = 5,
+        similarity_threshold: float = 0.15
+    ):
+        """
+        Ask a question and get a streaming AI-generated response using cloud LLMs.
+        
+        Args:
+            question: User's question
+            course_ids: Optional list of course IDs to search within  
+            mode: Response mode ('student' or 'instructor')
+            provider: LLM provider ('groq', 'openai', 'anthropic')
+            model_name: Optional specific model name
+            limit: Max number of chunks to retrieve
+            similarity_threshold: Minimum similarity for results
+        
+        Yields:
+            dict: Chunks of response data
+        """
+        logger = get_logger(__name__)
+        
+        try:
+            # Step 1: Semantic search for relevant content
+            search_request = SearchRequest(
+                query=question,
+                course_ids=[UUID(cid) for cid in course_ids] if course_ids else None,
+                limit=limit,
+                similarity_threshold=similarity_threshold
+            )
+            
+            search_response = self.search_service.semantic_search(search_request)
+            
+            if not search_response.results:
+                yield {
+                    "type": "complete",
+                    "question": question,
+                    "answer": "I couldn't find relevant content to answer your question.",
+                    "sources": [],
+                    "confidence": 0.0,
+                    "mode": mode,
+                    "model_info": {"provider": provider, "status": "no_content"}
+                }
+                return
+            
+            logger.info(f"Retrieved {len(search_response.results)} chunks for RAG streaming")
+            
+            # Step 2: Prepare content chunks
+            chunks = []
+            source_info = []
+            
+            for result in search_response.results:
+                content = result.content
+                
+                # Extract readable content from JSON if needed
+                if content.strip().startswith('{"schema"') or content.strip().startswith('{ "schema"'):
+                    try:
+                        import json
+                        parsed = json.loads(content)
+                        doc_structure = parsed.get('doc', {})
+                        if doc_structure:
+                            readable_content = self._extract_text_from_doc(doc_structure)
+                            if readable_content:
+                                content = readable_content
+                    except Exception:
+                        pass  # Use original content if parsing fails
+                
+                chunks.append(content)
+                source_info.append({
+                    "content": content[:200] + "..." if len(content) > 200 else content,
+                    "similarity_score": result.similarity_score,
+                    "source": f"Course content chunk {len(source_info) + 1}"
+                })
+            
+            # Step 3: Set up LLM provider
+            provider_kwargs = {}
+            if model_name:
+                provider_kwargs["model_name"] = model_name
+                
+            self.set_provider(provider, **provider_kwargs)
+            
+            # Step 4: Send initial metadata
+            yield {
+                "type": "start",
+                "question": question,
+                "sources": source_info,
+                "confidence": float(search_response.avg_similarity) if hasattr(search_response, 'avg_similarity') else 0.0,
+                "mode": mode,
+                "model_info": self._llm_provider.get_model_info()
+            }
+            
+            # Step 5: Stream response from LLM provider
+            try:
+                for chunk in self._llm_provider.process_question_stream(
+                    question=question,
+                    retrieved_chunks=chunks,
+                    mode=mode
+                ):
+                    yield chunk
+                    
+            except Exception as stream_error:
+                logger.error(f"Streaming error: {stream_error}")
+                yield {
+                    "type": "error",
+                    "error": f"Streaming error: {str(stream_error)}",
+                    "question": question,
+                    "model_info": self._llm_provider.get_model_info()
+                }
+            
+        except Exception as e:
+            logger.error(f"RAG streaming service error: {e}")
+            yield {
+                "type": "error",
+                "error": f"Service error: {str(e)}",
+                "question": question,
+                "model_info": {"provider": provider, "error": str(e)}
+            }
+    
     def _extract_text_from_doc(self, doc: dict) -> str:
         """Extract readable text from course editor JSON structure."""
         if not doc or 'content' not in doc:
