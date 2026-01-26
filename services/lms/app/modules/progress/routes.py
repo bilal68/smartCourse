@@ -19,7 +19,7 @@ from app.schemas.progress import (
     CourseProgressRead,
 )
 from app.core.logging import get_logger
-from app.tasks.progress_task import recalc_course_progress
+from app.tasks.progress_task import recalc_course_progress_sync
 
 logger = get_logger(__name__)
 
@@ -82,10 +82,11 @@ def upsert_asset_progress(
     if payload.percent_complete >= 100.0 and ap.completed_at is None:
         update_data["completed_at"] = now
 
+    # DATABASE-FIRST: Update asset progress directly (source of truth)
     progress_repo = progress_service.progress_repo
     ap = progress_repo.update_asset_progress(ap, **update_data)
 
-    # Create outbox event for async aggregation/notifications
+    # SAME TRANSACTION: Create outbox event for side effects (analytics, notifications)
     outbox = OutboxEvent(
         event_type="asset.progress.updated",
         aggregate_type="asset_progress",
@@ -93,23 +94,32 @@ def upsert_asset_progress(
         payload={
             "asset_id": str(asset_id),
             "enrollment_id": str(payload.enrollment_id),
+            "user_id": str(enrollment.user_id),
             "percent_complete": payload.percent_complete,
+            "completed_at": ap.completed_at.isoformat() if ap.completed_at else None,
+            "source": payload.source or "api",
+            "event_timestamp": now.isoformat()
         },
         status=OutboxStatus.pending,
         attempts=0,
     )
     db.add(outbox)
+    
+    # IMMEDIATE course progress recalculation (synchronous, same transaction)
+    course_completion_event = recalc_course_progress_sync(db, payload.enrollment_id)
+    if course_completion_event:
+        db.add(course_completion_event)  # Add course completion event if course became complete
+    
+    # Commit everything atomically: asset progress + course progress + outbox events
     db.commit()
     db.refresh(ap)
 
-    # Trigger async course progress recalculation
-    recalc_course_progress.delay(str(payload.enrollment_id))
-
     logger.info(
-        "asset progress upserted",
+        "asset progress updated with immediate course recalculation",
         asset_id=str(asset_id),
         enrollment_id=str(payload.enrollment_id),
         percent=ap.percent_complete,
+        database_first=True
     )
     return ap
 

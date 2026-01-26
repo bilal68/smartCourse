@@ -48,11 +48,11 @@ def handle_enrollment_post_actions(self, enrollment_id: str):
 
         logger.info(f"Starting post-enrollment orchestration for enrollment: {enrollment_id}")
         
-        # Emit single comprehensive enrollment event for all services
-        emit_enrollment_completed_event(db, enrollment)
+        # DATABASE-FIRST: Create progress records directly + emit event in same transaction
+        initialize_progress_tracking_sync(db, enrollment)
         
-        # Initialize progress tracking (trigger separate task)
-        initialize_progress_tracking.delay(str(enrollment.id))
+        # Emit enrollment completed event for external services (notifications, analytics)
+        emit_enrollment_completed_event(db, enrollment)
         
         db.commit()
         logger.info(f"Post-enrollment orchestration completed for enrollment: {enrollment_id}")
@@ -60,7 +60,7 @@ def handle_enrollment_post_actions(self, enrollment_id: str):
         return {
             "status": "success", 
             "enrollment_id": enrollment_id,
-            "actions_completed": ["event_emitted", "progress_init"]
+            "actions_completed": ["progress_initialized", "event_emitted"]
         }
 
     except Exception as e:
@@ -69,6 +69,53 @@ def handle_enrollment_post_actions(self, enrollment_id: str):
         raise
     finally:
         db.close()
+
+
+def initialize_progress_tracking_sync(db: Session, enrollment: Enrollment):
+    """
+    DATABASE-FIRST: Initialize progress tracking immediately.
+    
+    Creates CourseProgress and AssetProgress records directly in the database
+    in the same transaction as enrollment orchestration.
+    """
+    from app.modules.progress.models import CourseProgress, AssetProgress
+    from app.modules.courses.models import Module, LearningAsset
+    
+    # Create CourseProgress record (0%)
+    course_progress = CourseProgress(
+        enrollment_id=enrollment.id,
+        percent_complete=0.0,
+        started_at=None,
+        completed_at=None
+    )
+    db.add(course_progress)
+    
+    # Get all learning assets for this course
+    assets = (
+        db.query(LearningAsset)
+        .join(Module, Module.id == LearningAsset.module_id)
+        .filter(Module.course_id == enrollment.course_id)
+        .all()
+    )
+    
+    # Create AssetProgress records for all course assets (0%)
+    asset_progress_records = []
+    for asset in assets:
+        asset_progress = AssetProgress(
+            enrollment_id=enrollment.id,
+            asset_id=asset.id,
+            percent_complete=0.0,
+            started_at=None,
+            completed_at=None
+        )
+        asset_progress_records.append(asset_progress)
+    
+    db.add_all(asset_progress_records)
+    
+    logger.info(
+        f"Progress tracking initialized: 1 course progress + {len(asset_progress_records)} asset progress records",
+        enrollment_id=str(enrollment.id)
+    )
 
 
 def emit_enrollment_completed_event(db: Session, enrollment: Enrollment):
@@ -124,35 +171,6 @@ def emit_enrollment_completed_event(db: Session, enrollment: Enrollment):
     logger.info(f"Emitted enrollment.completed event for enrollment: {enrollment.id}")
 
 
-@celery_app.task(
-    name="app.tasks.enrollment_tasks.initialize_progress_tracking",
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=10,
-    retry_kwargs={"max_retries": 3},
-)
-def initialize_progress_tracking(self, enrollment_id: str):
-    """
-    Initialize progress tracking for the enrolled course.
-    This triggers the progress calculation task.
-    """
-    try:
-        # Import here to avoid circular imports
-        from app.tasks.progress_task import recalc_course_progress
-        
-        logger.info(f"Initializing progress tracking for enrollment: {enrollment_id}")
-        
-        # Trigger progress calculation
-        result = recalc_course_progress.delay(enrollment_id)
-        
-        logger.info(f"Progress tracking initialized for enrollment: {enrollment_id}, task_id: {result.id}")
-        
-        return {
-            "status": "success",
-            "enrollment_id": enrollment_id,
-            "progress_task_id": result.id
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize progress tracking for {enrollment_id}: {str(e)}")
-        raise
+# NOTE: The old async initialize_progress_tracking task has been removed.
+# Progress initialization is now done synchronously in the same transaction
+# as enrollment creation for immediate consistency (database-first approach).
