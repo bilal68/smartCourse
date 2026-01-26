@@ -19,10 +19,12 @@ from app.modules.progress.models import CourseProgress, AssetProgress
 logger = get_logger(__name__)
 
 TOPIC_MAP = {
-    "course.published": "course.events",  # Changed to unified topic
-    "course.ready": "course.events",      # Final state event for Notification + Analytics
+    "course.published": "course.events",
+    "course.ready": "course.events", 
     "enrollment.created": "smartcourse.enrollment-events",
-    # "asset.progress.updated": "smartcourse.progress-events",  # if you add later
+    
+    # Single comprehensive event - consumed by multiple services
+    "enrollment.completed": "smartcourse.enrollment-events",
 }
 
 MAX_ATTEMPTS = 5

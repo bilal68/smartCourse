@@ -147,6 +147,10 @@ class EnrollmentService:
         self.db.commit()
         self.db.refresh(enrollment)
 
+        # Trigger post-enrollment orchestration (async)
+        from app.tasks.enrollment_tasks import handle_enrollment_post_actions
+        handle_enrollment_post_actions.delay(str(enrollment.id))
+
         logger.info(
             "created enrollment",
             enrollment_id=str(enrollment.id),
