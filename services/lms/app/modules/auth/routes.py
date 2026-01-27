@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from fastapi import Body
 
 from app.db.deps import get_db
 from app.modules.auth.service import AuthService
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     status_code=status.HTTP_201_CREATED,
 )
 def register_user(
-    payload: UserCreate,
+    payload: UserCreate = Body(...),
     db: Session = Depends(get_db),
 ):
     """Register a new user."""
@@ -26,6 +27,7 @@ def register_user(
         email=payload.email,
         full_name=payload.full_name,
         password=payload.password,
+        db=db,
     )
     return user
 
@@ -42,3 +44,13 @@ def login(
         password=form_data.password,
     )
     return Token(access_token=access_token)
+
+
+@router.post("/verify", response_model=Token)
+def verify_user(
+    token: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+):
+    auth_service = AuthService(db)
+    tokens = auth_service.verify_user(token=token, db=db)
+    return Token(**tokens)

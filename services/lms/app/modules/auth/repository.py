@@ -68,3 +68,19 @@ class RoleRepository:
     def list_all(self) -> list[Role]:
         """List all roles."""
         return self.db.query(Role).all()
+
+
+class UserRoleRepository:
+    """Repository for UserRole entity with CRUD operations."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def assign_role(self, user_id: uuid.UUID, role_id: uuid.UUID) -> UserRole:
+        """Assign a role to a user."""
+        from app.modules.auth.models import UserRole
+
+        user_role = UserRole(user_id=user_id, role_id=role_id)
+        self.db.add(user_role)
+        self.db.flush()
+        return user_role

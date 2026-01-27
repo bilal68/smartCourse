@@ -202,7 +202,7 @@ class PublishCourseWorkflow:
                     start_to_close_timeout=timedelta(seconds=10),
                 )
                 raise ApplicationError(f"AI processing failed: {error_msg}")
-
+#todo:to add outbox addedition for course.ai_processed event
             workflow.logger.info("✅ AI processing successful, completing workflow")
 
             return {
