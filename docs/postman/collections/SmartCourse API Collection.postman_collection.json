@@ -1,0 +1,1369 @@
+{
+  "info": {
+    "_postman_id": "1c059d7e-e72a-499f-879a-59fa5e0cc815",
+    "name": "SmartCourse API Collection",
+    "description": "Complete API collection for testing SmartCourse microservices including LMS and AI services\n\nUpdated to add ARTICLE content.json S3 signed URL upload flow (upload-url, PUT upload, complete-upload) and to avoid storing content in DB.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "id": "aa054ad4-8fab-4437-9918-4204f91a43f5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{instructor_email}}\",\n    \"full_name\": \"{{instructor_name}}\",\n    \"password\": \"{{instructor_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/auth/register",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Extract access token from response",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('access_token', response.access_token);",
+                  "    console.log('Access token stored:', response.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "id": "f9761814-3454-49c1-98cc-f306ef8876a1"
+              }
+            }
+          ],
+          "id": "b4bb7e45-8611-4762-abac-eca1771d8a9f",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{instructor_email}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{instructor_password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/auth/login",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "60c2b372-63a9-44d0-b323-93eefbad4491"
+    },
+    {
+      "name": "Courses",
+      "item": [
+        {
+          "name": "Create Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "e1c768bd-5c9f-45f2-bac8-868965d6a309",
+                "exec": [
+                  "// Store course ID for subsequent requests",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('course_id', response.id);",
+                  "    console.log('Course ID stored:', response.id);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "2a0ca119-5cd3-4f7b-b74d-c011b5209c80",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"{{course_title}}\",\n    \"description\": \"{{course_description}}\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/courses",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Courses",
+          "id": "d3d06222-2a1d-4a4b-9406-cfb1e97cf816",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/courses",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Course by ID",
+          "id": "ada06c65-1bef-4338-a48f-cebade3969d3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Course",
+          "id": "0e84d870-a591-424b-a5ae-71d3c70da5f6",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"{{course_title}} - Updated\",\n    \"description\": \"{{course_description}} - Updated\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Course",
+          "id": "929d4552-1a98-430f-909e-37fb9a6127c4",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}/publish",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "publish"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Course",
+          "id": "53302853-8c01-48c4-bb5f-ad468e99672d",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/courses/{{course_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "5927e6e1-7ad3-4466-961f-52cee8e201f0"
+    },
+    {
+      "name": "Modules",
+      "item": [
+        {
+          "name": "Create Module",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Store module ID for subsequent requests",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('module_id', response.id);",
+                  "    console.log('Module ID stored:', response.id);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "id": "009e9b06-f88e-4a6f-a6b0-8ad09b31434f"
+              }
+            }
+          ],
+          "id": "bff11199-264e-446b-8bbd-75a6d1381337",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"course_id\": \"{{course_id}}\",\n    \"title\": \"{{module_title}}\",\n    \"description\": \"{{module_description}}\",\n    \"order_index\": 1\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/modules",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Modules by Course",
+          "id": "a3c1ecb8-f3f5-4a08-824b-c69d54bc8cd5",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/modules/by-course/{{course_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules",
+                "by-course",
+                "{{course_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Module by ID",
+          "id": "3c6ca987-08f4-4dcb-92e2-87d012b2c92f",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/modules/{{module_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules",
+                "{{module_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Module",
+          "id": "6c6efecb-66ef-4d4a-903f-35b861817616",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"{{module_title}} - Updated\",\n    \"description\": \"{{module_description}} - Updated\",\n    \"order_index\": 1\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/modules/{{module_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules",
+                "{{module_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Module",
+          "id": "fc11a7ce-93f7-4c4f-8c64-86d69ce8cb93",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/modules/{{module_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules",
+                "{{module_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "cc2a53ea-4107-4831-b08d-bfbe6e948d95"
+    },
+    {
+      "name": "Learning Assets",
+      "item": [
+        {
+          "name": "Create Learning Asset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "8ba5ecff-bc13-4abc-a23d-557ce221ff6a",
+                "exec": [
+                  "// Store asset ID for subsequent requests",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('asset_id', response.id);",
+                  "    console.log('Asset ID stored:', response.id);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "cf31b587-b25e-475e-92b5-63f49b8888f1",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"module_id\": \"{{module_id}}\",\n    \"title\": \"{{asset_title}}\",\n    \"description\": \"{{asset_description}}\",\n    \"asset_type\": \"{{asset_type}}\",\n    \"order_index\": 1,\n    \"duration_seconds\": 300,\n    \"source_kind\": \"upload\",\n    \"content_format\": \"EDITOR_JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Assets by Module",
+          "id": "ea18d122-83b0-4074-9f61-3b262eb244b8",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/by-module/{{module_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "by-module",
+                "{{module_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset by ID",
+          "id": "1d41548d-5927-4ac6-8f2d-f18bb9ce8b1f",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Asset",
+          "id": "5babe426-17fb-4cc3-b9ee-d0bc51b27f46",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"module_id\": \"{{module_id}}\",\n    \"title\": \"{{asset_title}} - Updated\",\n    \"description\": \"{{asset_description}} - Updated\",\n    \"asset_type\": \"{{asset_type}}\",\n    \"order_index\": 1,\n    \"duration_seconds\": 450,\n    \"source_kind\": \"upload\",\n    \"content_format\": \"EDITOR_JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Asset",
+          "id": "4b9d0d63-4fc2-43c7-8e6a-e6aaacdbc9ad",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "9759f636-4e24-470d-b5c0-fd58bec71687"
+    },
+    {
+      "name": "Asset Content (S3 JSON Upload Flow)",
+      "item": [
+        {
+          "name": "Initiate ARTICLE Content Upload (Signed PUT URL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "7713f9d4-e489-4492-b0b8-b41c8ef060e0",
+                "exec": [
+                  "// Store signed PUT URL for subsequent PUT request",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const r = pm.response.json();",
+                  "  const url = r.upload_url || r.url || r.signed_put_url;",
+                  "  if (url) {",
+                  "    pm.environment.set('signed_put_url', url);",
+                  "    console.log('signed_put_url stored');",
+                  "  } else {",
+                  "    console.warn('No upload_url found in response');",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "cb4a0c27-cefc-462b-8815-0ef25590efbe",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content_type\": \"{{asset_content_type}}\",\n  \"size_bytes\": {{asset_size_bytes}}\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}/content/upload-url",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "content",
+                "upload-url"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete ARTICLE Content Upload (Validate + Mark READY)",
+          "id": "962e6620-e321-4b29-8153-d25d1e11e782",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}/content/complete",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "content",
+                "complete"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset (Returns Signed GET content_url)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Optionally store signed GET URL if returned",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const r = pm.response.json();",
+                  "  const url = r.content_url || r.signed_get_url || r.url;",
+                  "  if (url) {",
+                  "    pm.environment.set('signed_get_url', url);",
+                  "    console.log('signed_get_url stored');",
+                  "  }",
+                  "}"
+                ],
+                "id": "f33c35a7-57d8-4098-a568-4b14dc637eb2"
+              }
+            }
+          ],
+          "id": "67205663-1548-457e-916a-431528f4782b",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/assets/{{asset_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET content.json via Signed GET URL (Optional)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('signed_get_url')) {",
+                  "  throw new Error('signed_get_url is not set. Run Get Asset request first.');",
+                  "}"
+                ],
+                "id": "61a2043a-7f0d-4dcd-92cb-bf8b3077ac72"
+              }
+            }
+          ],
+          "id": "d8149bc2-29e3-4218-9473-881804030ca9",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{signed_get_url}}/",
+              "host": [
+                "{{signed_get_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT content.json to Signed URL (S3 Direct Upload)",
+          "id": "02a34e3a-f0ef-4780-9114-3852e74652da",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"schema\": \"smartcourse.editor.v1\",\r\n    \"doc\": {\r\n        \"type\": \"doc\",\r\n        \"content\": [\r\n            {\r\n                \"type\": \"heading\",\r\n                \"attrs\": {\r\n                    \"level\": 1\r\n                },\r\n                \"content\": [\r\n                    {\r\n                        \"type\": \"text\",\r\n                        \"text\": \"Lesson Title\"\r\n                    }\r\n                ]\r\n            },\r\n            {\r\n                \"type\": \"paragraph\",\r\n                \"content\": [\r\n                    {\r\n                        \"type\": \"text\",\r\n                        \"text\": \"This is a sample lesson body for testing upload + RAG.\"\r\n                    }\r\n                ]\r\n            },\r\n            {\r\n                \"type\": \"heading\",\r\n                \"attrs\": {\r\n                    \"level\": 2\r\n                },\r\n                \"content\": [\r\n                    {\r\n                        \"type\": \"text\",\r\n                        \"text\": \"Section 1\"\r\n                    }\r\n                ]\r\n            },\r\n            {\r\n                \"type\": \"paragraph\",\r\n                \"content\": [\r\n                    {\r\n                        \"type\": \"text\",\r\n                        \"text\": \"Explain a concept here. Add enough text so chunking works.\"\r\n                    }\r\n                ]\r\n            },\r\n            {\r\n                \"type\": \"bulletList\",\r\n                \"content\": [\r\n                    {\r\n                        \"type\": \"listItem\",\r\n                        \"content\": [\r\n                            {\r\n                                \"type\": \"paragraph\",\r\n                                \"content\": [\r\n                                    {\r\n                                        \"type\": \"text\",\r\n                                        \"text\": \"Point A\"\r\n                                    }\r\n                                ]\r\n                            }\r\n                        ]\r\n                    },\r\n                    {\r\n                        \"type\": \"listItem\",\r\n                        \"content\": [\r\n                            {\r\n                                \"type\": \"paragraph\",\r\n                                \"content\": [\r\n                                    {\r\n                                        \"type\": \"text\",\r\n                                        \"text\": \"Point B\"\r\n                                    }\r\n                                ]\r\n                            }\r\n                        ]\r\n                    }\r\n                ]\r\n            },\r\n            {\r\n                \"type\": \"codeBlock\",\r\n                \"attrs\": {\r\n                    \"language\": \"python\"\r\n                },\r\n                \"content\": [\r\n                    {\r\n                        \"type\": \"text\",\r\n                        \"text\": \"print('hello')\"\r\n                    }\r\n                ]\r\n            }\r\n        ]\r\n    }\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{signed_put_url}}",
+              "host": [
+                "{{signed_put_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "8e812a96-61f4-4786-b239-5aed328076dc"
+    },
+    {
+      "name": "Enrollments",
+      "item": [
+        {
+          "name": "Create Enrollment (Student)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Store enrollment ID for subsequent requests",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('enrollment_id', response.id);",
+                  "    console.log('Enrollment ID stored:', response.id);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "id": "bc33d6d3-ee13-4c72-b4d0-d4dc9797d6b8"
+              }
+            }
+          ],
+          "id": "a190e50f-3bcc-4421-a704-7bf5d1444870",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{student_user_id}}\",\n    \"course_id\": \"{{course_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/enrollments",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Enrollments",
+          "id": "3d187967-af48-4d30-80bd-60fcd0f90970",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/enrollments/user/{{student_user_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "user",
+                "{{student_user_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Course Enrollments",
+          "id": "1264fb68-8fa5-44c6-a6d7-121d9c7cf294",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/enrollments/course/{{course_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "course",
+                "{{course_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Enrollment Status",
+          "id": "39012da8-e94b-485b-a2a2-3c1a47ae808b",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/enrollments/{{enrollment_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "29eda8d7-1e6c-42da-b961-611b4bf04da1"
+    },
+    {
+      "name": "Progress Tracking",
+      "item": [
+        {
+          "name": "Update Asset Progress",
+          "id": "1c2a3398-46cf-4df5-b775-e01c3a5a31e2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"enrollment_id\": \"{{enrollment_id}}\",\n    \"progress_percent\": 75.5,\n    \"is_completed\": false,\n    \"time_spent_seconds\": 225\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/progress/assets/{{asset_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "progress",
+                "assets",
+                "{{asset_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Asset Progress",
+          "id": "d6678bb3-04ea-4581-9187-e04d838f3570",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"enrollment_id\": \"{{enrollment_id}}\",\n    \"progress_percent\": 100.0,\n    \"is_completed\": true,\n    \"time_spent_seconds\": 300\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/progress/assets/{{asset_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "progress",
+                "assets",
+                "{{asset_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Course Progress",
+          "id": "21bc53e6-112d-4628-a5d8-b637de273280",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/progress/courses/{{course_id}}/enrollment/{{enrollment_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "progress",
+                "courses",
+                "{{course_id}}",
+                "enrollment",
+                "{{enrollment_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset Progress",
+          "id": "77c15712-6489-4eb2-9825-c441c4d16793",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/progress/assets/{{asset_id}}/enrollment/{{enrollment_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "progress",
+                "assets",
+                "{{asset_id}}",
+                "enrollment",
+                "{{enrollment_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "91bf37e0-5b23-49fe-95ec-44713c59a27f"
+    },
+    {
+      "name": "AI Service",
+      "item": [
+        {
+          "name": "AI Health Check",
+          "id": "855888b7-2962-43e4-8211-a85c1469d452",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ai_base_url}}/health",
+              "host": [
+                "{{ai_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search",
+          "id": "a79d4f40-c761-47ae-ac19-83acb011d404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"query\": \"concepts\",\n    \"course_ids\": [\"fb750e3f-5f97-4bf0-9784-44eeb32e9a9d\"],\n    \"limit\": 10,\n    \"similarity_threshold\": 0.7\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{ai_base_url}}/api/v1/content/search",
+              "host": [
+                "{{ai_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "content",
+                "search"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"http://localhost:8001/content/search\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"query\": \"concepts\",\n    \"course_ids\": [\"fb750e3f-5f97-4bf0-9784-44eeb32e9a9d\"],\n    \"limit\": 10,\n    \"similarity_threshold\": 0.7\n  }'"
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Embeddings",
+          "id": "1cc5bb50-bec1-4f3a-9032-ac042fd18c38",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{ai_base_url}}/api/v1/content/generate-embeddings",
+              "host": [
+                "{{ai_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "content",
+                "generate-embeddings"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"http://localhost:8001/api/v1/content/generate-embeddings\""
+          },
+          "response": []
+        },
+        {
+          "name": "AI Service Info",
+          "id": "d59c133b-a0b2-4d90-a229-b34db156e14d",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ai_base_url}}/",
+              "host": [
+                "{{ai_base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stream",
+          "id": "b1c40db1-856e-4c66-982c-c3cc8746d587",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/plain"
+              },
+              {
+                "key": "Cache-Control",
+                "value": "no-cache"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"What is machine learning?\",\n    \"course_ids\": null,\n    \"mode\": \"student\",\n    \"provider\": \"groq\",\n    \"model_name\": null\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8001/api/v1/rag/ask/stream",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "port": "8001",
+              "path": [
+                "api",
+                "v1",
+                "rag",
+                "ask",
+                "stream"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"http://127.0.0.1:8001/rag/ask/stream\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"Accept: text/plain\" \\\n  -H \"Cache-Control: no-cache\" \\\n  -d '{\n    \"question\": \"What is machine learning?\",\n    \"course_ids\": null,\n    \"mode\": \"student\",\n    \"provider\": \"groq\",\n    \"model_name\": null\n  }' \\\n  --no-buffer -N"
+          },
+          "response": []
+        }
+      ],
+      "id": "9a2912b4-c609-4447-9154-29c15f6f98d4"
+    },
+    {
+      "name": "Celery Testing",
+      "item": [
+        {
+          "name": "Test Async Task",
+          "id": "fccff067-8726-498c-9b11-49830683c63e",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"message\": \"Hello from Postman!\",\n    \"delay\": 5\n}"
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/celery-test/async-task",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "celery-test",
+                "async-task"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task Status",
+          "id": "769ebc00-7f77-4009-8072-07b7c48cc763",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/celery-test/task-status/{{task_id}}",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "celery-test",
+                "task-status",
+                "{{task_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "1dae575b-045e-4f06-ae98-ff74707d9f43"
+    },
+    {
+      "name": "Register",
+      "item": [
+        {
+          "name": "Verify",
+          "id": "b00d77db-6ae5-47f1-8df2-e6e8020cc696",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"token\": \"your_verification_token\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/registration/verify",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "registration",
+                "verify"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"{{lms_base_url}}/api/v1/registration/verify\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"token\": \"your_verification_token\"\n  }'"
+          },
+          "response": []
+        },
+        {
+          "name": "Register user",
+          "id": "0cd24061-7ae3-43ba-8d52-df4f54425920",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"full_name\": \"User Name\",\n    \"password\": \"your_password\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{lms_base_url}}/api/v1/registration/register",
+              "host": [
+                "{{lms_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "registration",
+                "register"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"{{lms_base_url}}/api/v1/registration/register\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"email\": \"user@example.com\",\n    \"full_name\": \"User Name\",\n    \"password\": \"your_password\"\n  }'"
+          },
+          "response": []
+        }
+      ],
+      "id": "f124bdd6-f6ac-479c-bd72-83e2a4179a34"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "id": "6bc6c002-c62a-40cf-9f48-eab7ef3bb62b",
+      "key": "lms_base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "id": "78f96ccb-af13-47d5-96a9-c1959cacee6b",
+      "key": "ai_base_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "id": "25a8aeb0-e882-4de8-8627-2459a46f009e",
+      "key": "asset_content_type",
+      "value": "application/json",
+      "type": "string"
+    },
+    {
+      "id": "8ec49951-4ec2-4a12-81b8-aa3f9e2e5f93",
+      "key": "asset_size_bytes",
+      "value": "5000",
+      "type": "string"
+    },
+    {
+      "id": "6b14df48-3854-456e-88ab-c6434e7e3222",
+      "key": "article_schema",
+      "value": "smartcourse.editor.v1",
+      "type": "string"
+    },
+    {
+      "id": "4e8bca1d-0632-4615-af5b-bf7b70849c8b",
+      "key": "signed_put_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "id": "1cf8bb1b-488a-4299-92e6-dc4ec3e89fb6",
+      "key": "signed_get_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "id": "b447a0d8-2ea1-47c2-9651-d8c78990e4bb",
+      "key": "article_content_json",
+      "value": "{\n  \"schema\": \"{{article_schema}}\",\n  \"doc\": {\n    \"type\": \"doc\",\n    \"content\": [\n      {\n        \"type\": \"heading\",\n        \"attrs\": {\n          \"level\": 1\n        },\n        \"content\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Lesson Title\"\n          }\n        ]\n      },\n      {\n        \"type\": \"paragraph\",\n        \"content\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"This is a sample lesson body for testing upload + RAG.\"\n          }\n        ]\n      },\n      {\n        \"type\": \"heading\",\n        \"attrs\": {\n          \"level\": 2\n        },\n        \"content\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Section 1\"\n          }\n        ]\n      },\n      {\n        \"type\": \"paragraph\",\n        \"content\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Explain a concept here. Add enough text so chunking works.\"\n          }\n        ]\n      },\n      {\n        \"type\": \"bulletList\",\n        \"content\": [\n          {\n            \"type\": \"listItem\",\n            \"content\": [\n              {\n                \"type\": \"paragraph\",\n                \"content\": [\n                  {\n                    \"type\": \"text\",\n                    \"text\": \"Point A\"\n                  }\n                ]\n              }\n            ]\n          },\n          {\n            \"type\": \"listItem\",\n            \"content\": [\n              {\n                \"type\": \"paragraph\",\n                \"content\": [\n                  {\n                    \"type\": \"text\",\n                    \"text\": \"Point B\"\n                  }\n                ]\n              }\n            ]\n          }\n        ]\n      },\n      {\n        \"type\": \"codeBlock\",\n        \"attrs\": {\n          \"language\": \"python\"\n        },\n        \"content\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"print('hello')\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+      "type": "string"
+    }
+  ]
+}
