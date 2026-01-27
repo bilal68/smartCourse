@@ -136,8 +136,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
-.env.local
 .envrc
 .venv
 env/
@@ -228,5 +226,6 @@ htmlcov/
 .coverage.*
 
 # VS Code settings (uncomment if you want to ignore)
-.vscode/
 storage/
+config.bat
+node_modules
