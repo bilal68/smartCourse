@@ -132,10 +132,14 @@ db.commit()
 └─────────────────────────────────────────┘
 ```
 
-## Authentication & Authorization
 
-### JWT Authentication (in LMS service)
-- `POST /api/v1/auth/register` - Register new user
+## Registration, Verification & Authentication
+
+### Registration & Verification (modular)
+- `POST /api/v1/registration/register` - Register new user (modular, transactional outbox, role assignment)
+- `POST /api/v1/registration/verify` - Verify user (token-based, event-driven)
+
+### JWT Authentication
 - `POST /api/v1/auth/login` - Get JWT token
 
 ### RBAC (Role-Based Access Control)

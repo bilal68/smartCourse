@@ -97,17 +97,8 @@ smartcourse/
   - Role-Based Access Control (RBAC)
   - Course CRUD operations
   - Module & asset management
-  - Student enrollments
-  - Progress tracking
-  - Outbox pattern for events
-
-**API Docs**: http://localhost:8000/docs
-
-### 2️⃣ AI Service (Port 8001)
-**AI-powered content generation and recommendations**
-
-- 🚧 **Skeleton** - Ready for implementation
-- **Database**: None (stateless service)
+  - Modular user registration (outbox, role, verification)
+  - JWT authentication
 - **Tech Stack**: FastAPI, OpenAI, LangChain
 - **Planned Features**:
   - AI chat assistant
@@ -131,6 +122,26 @@ smartcourse/
   - Engagement analytics
   - Custom reports
 
+
+Services communicate asynchronously via **Kafka events**:
+
+### Events Published by LMS
+
+| Event | Topic | Consumers |
+|-------|-------|-----------|
+| `user.registered` | `smartcourse.user-events` | Notification |
+| `user.verified` | `smartcourse.user-events` | Notification |
+| `course.published` | `smartcourse.course-events` | AI, Analytics, Notification |
+| `enrollment.created` | `smartcourse.enrollment-events` | AI, Analytics, Notification |
+| `enrollment.completed` | `smartcourse.enrollment-events` | Notification |
+
+### Outbox Pattern
+
+LMS service uses **transactional outbox pattern** for reliable event delivery:
+1. Business logic + outbox event saved in **same transaction**
+2. Celery task polls outbox every 10 seconds
+3. Publishes pending events to Kafka
+4. Marks events as published
 **API Docs**: http://localhost:8002/docs (when running)
 
 ### 4️⃣ Notification Service
@@ -344,7 +355,10 @@ Each service gets its own deployment:
 
 ## 📖 Documentation
 
-- [services/lms/README.md](services/lms/README.md) - LMS Service details
+
+## 📖 Documentation
+- [services/lms/README.md](services/lms/README.md) - LMS Service details (see registration module)
+- [services/lms/app/modules/registration/](services/lms/app/modules/registration/) - Registration logic & endpoints
 - [services/ai/README.md](services/ai/README.md) - AI Service details
 - [services/analytics/README.md](services/analytics/README.md) - Analytics Service details
 - [services/notification/README.md](services/notification/README.md) - Notification Service details

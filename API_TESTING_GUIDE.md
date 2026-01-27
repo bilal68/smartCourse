@@ -21,12 +21,22 @@ This document provides a step-by-step guide for testing the SmartCourse microser
 ## Testing Workflow
 
 ### 1. Authentication Setup
+
 #### Register an Instructor
 ```
-POST {{lms_base_url}}/api/v1/auth/register
+POST {{lms_base_url}}/api/v1/registration/register
 ```
 - Uses predefined instructor credentials from environment
-- Creates a user with instructor privileges
+- Creates a user with instructor privileges (modular, transactional outbox, role assignment)
+
+#### Verify Instructor
+```
+POST {{lms_base_url}}/api/v1/registration/verify
+{
+   "token": "<verification_token>"
+}
+```
+- Verifies instructor account (token sent via email event)
 
 #### Login to Get Access Token
 ```
@@ -116,10 +126,22 @@ Look for the `processing_status` field which should progress from:
 ### 6. Student Enrollment & Progress
 
 #### Create Student Account
+
 First, register a student user by changing the environment variables:
 - Set `student_email`, `student_name`, `student_password`
-- Use the register endpoint with student credentials
+- Use the registration endpoint with student credentials:
+```
+POST {{lms_base_url}}/api/v1/registration/register
+```
 - Store the returned user ID in `student_user_id`
+
+Then verify the student account:
+```
+POST {{lms_base_url}}/api/v1/registration/verify
+{
+   "token": "<verification_token>"
+}
+```
 
 #### Create Enrollment
 ```
@@ -203,7 +225,7 @@ These are automatically populated by test scripts:
 ## Testing Complete Event-Driven Workflow
 
 ### End-to-End Test Sequence:
-1. **Register & Login** → Get access token
+1. **Register & Verify** → Register and verify user, then get access token
 2. **Create Course** → Store course_id
 3. **Create Module** → Store module_id
 4. **Create Asset** → Store asset_id (with content URL)
@@ -236,6 +258,16 @@ These are automatically populated by test scripts:
 5. Verify Kafka topic messages are flowing correctly
 
 ## Expected Results
+
+
+### Successful Registration & Verification:
+- User created with status "pending"
+- Outbox event created for `user.registered`
+- Kafka message published to `user-events` topic
+- Verification token sent via notification service
+- User verified, status updated to "active"
+- Outbox event created for `user.verified`
+- Access and refresh tokens returned
 
 ### Successful Course Publishing:
 - Course status changes to "published"
