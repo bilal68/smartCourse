@@ -13,12 +13,14 @@ Core Learning Management System service handling user management, courses, enrol
 
 ## Architecture
 
+
 ```
 app/
 ├── main.py              # FastAPI application
 ├── celery_app.py        # Celery configuration
 ├── modules/             # Domain modules
 │   ├── auth/           # Authentication & authorization
+│   ├── registration/   # User registration & verification (modular)
 │   ├── courses/        # Course management
 │   ├── enrollments/    # Student enrollments
 │   └── progress/       # Progress tracking
@@ -50,9 +52,11 @@ celery -A app.celery_app worker --loglevel=info
 celery -A app.celery_app beat --loglevel=info
 ```
 
+
 ## API Endpoints
 
-- `POST /api/v1/auth/register` - User registration
+- `POST /api/v1/registration/register` - User registration (modular, transactional outbox, role assignment)
+- `POST /api/v1/registration/verify` - User verification (token-based, event-driven)
 - `POST /api/v1/auth/login` - User login
 - `GET /api/v1/courses` - List courses
 - `POST /api/v1/courses` - Create course
@@ -60,9 +64,11 @@ celery -A app.celery_app beat --loglevel=info
 - `POST /api/v1/enrollments` - Create enrollment
 - `POST /api/v1/progress/assets/{id}` - Update asset progress
 
+
 ## Events Published
 
-- `user.registered` - When user registers
+- `user.registered` - When user registers (via registration module)
+- `user.verified` - When user is verified
 - `user.role_assigned` - When role assigned to user
 - `course.created` - When course is created
 - `course.published` - When course is published
