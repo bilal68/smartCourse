@@ -1,0 +1,208 @@
+# docker-compose.dev.yml
+# Infra-focused dev compose (tables are created by Alembic, DBs are created by postgres-init on fresh volume)
+
+services:
+  # ============================================
+  # DATABASE (Postgres + pgvector)
+  # ============================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smartcourse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smartcourse
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: smartcourse_lms
+    ports:
+      - "5432:5432"
+    volumes:
+      - smartcourse_pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartcourse -d smartcourse_lms"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # ============================================
+  # CACHE
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: smartcourse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # ============================================
+  # QUEUE (RabbitMQ)
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartcourse-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # ============================================
+  # KAFKA + SCHEMA REGISTRY + UI
+  # ============================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: smartcourse-zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - smartcourse_zkdata:/var/lib/zookeeper/data
+      - smartcourse_zklog:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: smartcourse-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092" # host access (your local apps)
+      - "29092:29092" # docker internal access
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Dual listeners (internal docker + host)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - smartcourse_kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka:29092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.1
+    container_name: smartcourse-schema-registry
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: smartcourse-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: smartcourse
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+
+  # ============================================
+  # OBJECT STORAGE (MinIO)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: smartcourse-minio
+    restart: unless-stopped
+    ports:
+      - "9001:9000" # API on host 9001
+      - "9002:9001" # Console on host 9002
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - smartcourse_miniodata:/data
+    command: server /data --console-address ":9001"
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: smartcourse-minio-init
+    restart: "no"
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      until mc alias set smartcourse http://minio:9000 minioadmin minioadmin123 2>/dev/null; do
+        sleep 2;
+      done;
+      mc mb -p smartcourse/smartcourse-dev || true;
+      echo 'MinIO init done (bucket: smartcourse-dev)';
+      "
+
+  # ============================================
+  # TEMPORAL (uses Postgres DBs created via postgres-init)
+  # ============================================
+  temporal:
+    image: temporalio/auto-setup:1.24.0
+    container_name: smartcourse-temporal
+    restart: unless-stopped
+    ports:
+      - "7233:7233"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: smartcourse
+      POSTGRES_PWD: password
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.30.0
+    container_name: smartcourse-temporal-ui
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    ports:
+      - "8082:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+
+volumes:
+  smartcourse_pgdata:
+  smartcourse_miniodata:
+  smartcourse_zkdata:
+  smartcourse_zklog:
+  smartcourse_kafkadata:

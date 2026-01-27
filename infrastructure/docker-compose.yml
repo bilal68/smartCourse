@@ -1,0 +1,321 @@
+version: "3.9"
+
+services:
+  # ============================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smartcourse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smartcourse
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: smartcourse_lms
+    ports:
+      - "5432:5432"
+    volumes:
+      - smartcourse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartcourse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    container_name: smartcourse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartcourse-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: smartcourse-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - smartcourse_zkdata:/var/lib/zookeeper/data
+      - smartcourse_zklog:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: smartcourse-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - smartcourse_kafkadata:/var/lib/kafka/data
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.1
+    container_name: smartcourse-schema-registry
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: smartcourse-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: smartcourse
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+
+  minio:
+    image: minio/minio:latest
+    container_name: smartcourse-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    volumes:
+      - smartcourse_miniodata:/data
+    command: server /data --console-address ":9001"
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: smartcourse-minio-init
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      until /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin123 2>/dev/null; do
+        sleep 2;
+      done;
+
+      /usr/bin/mc mb myminio/smartcourse-dev --ignore-existing;
+
+      # OPTIONAL: public read (sirf dev me)
+      # /usr/bin/mc anonymous set download myminio/smartcourse-dev;
+
+      echo 'MinIO init done (bucket: smartcourse-dev)';
+      "
+
+  # ============================================
+  # APPLICATION SERVICES
+  # ============================================
+
+  lms-service:
+    build:
+      context: ../services/lms
+      dockerfile: Dockerfile
+    container_name: smartcourse-lms
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - minio
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://smartcourse:password@postgres:5432/smartcourse_lms
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_REGION: us-east-1
+      S3_BUCKET: smartcourse-dev
+      S3_USE_SSL: "false"
+      S3_PRESIGN_EXPIRES_SECONDS: "600"
+    volumes:
+      - ../services/lms:/app
+
+  lms-worker:
+    build:
+      context: ../services/lms
+      dockerfile: Dockerfile
+    container_name: smartcourse-lms-worker
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info --pool=solo
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - kafka
+      - minio
+    environment:
+      DATABASE_URL: postgresql://smartcourse:password@postgres:5432/smartcourse_lms
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_REGION: us-east-1
+      S3_BUCKET: smartcourse-dev
+      S3_USE_SSL: "false"
+      S3_PRESIGN_EXPIRES_SECONDS: "600"
+    volumes:
+      - ../services/lms:/app
+
+  lms-beat:
+    build:
+      context: ../services/lms
+      dockerfile: Dockerfile
+    container_name: smartcourse-lms-beat
+    restart: unless-stopped
+    command: celery -A app.celery_app beat --loglevel=info
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - minio
+    environment:
+      DATABASE_URL: postgresql://smartcourse:password@postgres:5432/smartcourse_lms
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_REGION: us-east-1
+      S3_BUCKET: smartcourse-dev
+      S3_USE_SSL: "false"
+      S3_PRESIGN_EXPIRES_SECONDS: "600"
+    volumes:
+      - ../services/lms:/app
+
+  ai-service:
+    build:
+      context: ../services/ai
+      dockerfile: Dockerfile
+    container_name: smartcourse-ai
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8001:8001"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-changeme}
+    volumes:
+      - ../services/ai:/app
+
+  analytics-service:
+    build:
+      context: ../services/analytics
+      dockerfile: Dockerfile
+    container_name: smartcourse-analytics
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - kafka
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://smartcourse:password@postgres:5432/analytics_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    volumes:
+      - ../services/analytics:/app
+
+  notification-worker:
+    build:
+      context: ../services/notification
+      dockerfile: Dockerfile
+    container_name: smartcourse-notification
+    restart: unless-stopped
+    depends_on:
+      - rabbitmq
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-changeme}
+    volumes:
+      - ../services/notification:/app
+
+  # ============================================
+  # WORKFLOW ORCHESTRATION (Temporal)
+  # ============================================
+
+  temporal:
+    image: temporalio/auto-setup:1.24.0
+    container_name: smartcourse-temporal
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "7233:7233"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: smartcourse
+      POSTGRES_PWD: password
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+
+  temporal-ui:
+    image: temporalio/ui:2.30.0
+    container_name: smartcourse-temporal-ui
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    ports:
+      - "8082:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+
+volumes:
+  smartcourse_pgdata:
+  smartcourse_zkdata:
+  smartcourse_zklog:
+  smartcourse_kafkadata:
+  smartcourse_miniodata:

@@ -129,6 +129,7 @@ __pypackages__/
 
 # Celery stuff
 celerybeat-schedule
+celerybeat-schedule.*
 celerybeat.pid
 
 # SageMath parsed files
@@ -207,4 +208,25 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-celerybeat-schedule*
+# Documentation files (temporary)
+ARCHITECTURE.md
+MIGRATION_SUMMARY.md
+STRUCTURE.md
+CHECKLIST.md
+QUICKSTART.md
+
+# Postman collections (can be committed if desired)
+postman_collection.json
+
+# Test databases
+*.db
+test.db
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# VS Code settings (uncomment if you want to ignore)
+.vscode/
+storage/

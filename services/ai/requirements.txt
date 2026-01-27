@@ -1,0 +1,18 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic-settings==2.0.3
+confluent-kafka==2.12.2
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.7
+boto3==1.35.98
+alembic==1.13.1
+structlog==23.2.0
+pgvector==0.3.0
+tenacity==8.2.3
+sentence-transformers==2.2.2
+torch==2.1.0
+
+# Cloud LLM providers for assignment requirements
+groq==0.4.1
+openai==1.6.1
+anthropic==0.7.8

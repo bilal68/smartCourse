@@ -2,57 +2,73 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "FastAPI Debug (reload)",
+      "name": "LMS API",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["app.main:app", "--reload", "--reload-dir", "app"],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env.local",
+      "args": ["app.main:app", "--reload", "--reload-dir", "app", "--port", "8000"],
+      "cwd": "${workspaceFolder}/services/lms",
+      "envFile": "${workspaceFolder}/services/lms/.env.local",
       "console": "integratedTerminal",
       "justMyCode": true,
       "subProcess": true,
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
     {
-      "name": "FastAPI Debug (no reload)",
+      "name": "AI Service",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["app.main:app"],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env.local",
+      "args": ["app.main:app", "--reload", "--reload-dir", "app", "--port", "8001"],
+      "cwd": "${workspaceFolder}/services/ai",
+      "envFile": "${workspaceFolder}/services/ai/.env",
       "console": "integratedTerminal",
       "justMyCode": true,
+      "subProcess": true,
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/ai",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
     {
-      "name": "Debug Kafka Consumer Worker",
+      "name": "AI Completion Consumer",
       "type": "debugpy",
       "request": "launch",
-      "module": "app.kafka.consumer_worker",
-      "cwd": "${workspaceFolder}",
+      "module": "app.integrations.kafka.ai_completion_consumer",
+      "cwd": "${workspaceFolder}/services/lms",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env.local",
+      "envFile": "${workspaceFolder}/services/lms/.env.local",
       "env": {
         "LOG_LEVEL": "DEBUG",
-        "KAFKA_IDLE_LOG_EVERY": "5",
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
       }
     },
     {
-      "name": "Debug Celery Worker (solo)",
+      "name": "AI Course Published Consumer",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.consumers.course_published_consumer",
+      "cwd": "${workspaceFolder}/services/ai",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/services/ai/.env.local",
+      "env": {
+        "LOG_LEVEL": "DEBUG",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/ai",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "Celery Worker (OUTBOX Publisher)",
       "type": "debugpy",
       "request": "launch",
       "module": "celery",
@@ -63,14 +79,123 @@
         "--loglevel=DEBUG",
         "--pool=solo"
       ],
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/services/lms",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env.local",
+      "envFile": "${workspaceFolder}/services/lms/.env.local",
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
         "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "LMS Celery Beat",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "app.celery_app:celery_app",
+        "beat",
+        "--loglevel=INFO"
+      ],
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/services/lms/.env.local",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms",
+        "PYDEVD_USE_FRAME_EVAL": "NO"
+      }
+    },
+    {
+      "name": "Temporal Worker",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/services/lms/run_temporal_worker.py",
+      "cwd": "${workspaceFolder}/services/lms",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "noDebug": true,
+      "envFile": "${workspaceFolder}/services/lms/.env.local",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "${workspaceFolder}/services/lms"
+      }
+    },
+    {
+    "name": "Celery Worker (Certificates)",
+    "type": "debugpy",
+    "request": "launch",
+    "module": "celery",
+    "args": [
+      "-A",
+      "app.celery_app:celery_app",
+      "worker",
+      "--loglevel=DEBUG",
+      "--pool=solo",
+      "-Q",
+      "certificates",
+      "-n",
+      "certificates@%h"
+    ],
+    "cwd": "${workspaceFolder}/services/lms",
+    "console": "integratedTerminal",
+    "justMyCode": true,
+    "envFile": "${workspaceFolder}/services/lms/.env.local",
+    "env": {
+      "PYTHONUNBUFFERED": "1",
+      "PYTHONPATH": "${workspaceFolder}/services/lms",
+      "PYDEVD_USE_FRAME_EVAL": "NO"
+    }
+  }
+  ],
+  "compounds": [
+    {
+      "name": "Publish Flow (Dev)",
+      "configurations": [
+        "LMS API",
+        "Temporal Worker",
+        "AI Service",
+        "AI Completion Consumer",
+        "AI Course Published Consumer",
+        "Celery Worker (OUTBOX Publisher)"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "microservices"
+      }
+    },
+    {
+      "name": "Publish Flow (Prod with Beat)",
+      "configurations": [
+        "LMS API",
+        "Temporal Worker",
+        "AI Service",
+        "AI Completion Consumer",
+        "AI Course Published Consumer",
+        "Celery Worker (OUTBOX Publisher)",
+        "LMS Celery Beat"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "microservices"
+      }
+    },
+    {
+      "name": "APIs Only",
+      "configurations": [
+        "LMS API",
+        "AI Service"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "microservices"
       }
     }
   ]
